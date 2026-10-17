@@ -5,16 +5,35 @@ import { loadConfig, requireEnv } from './config.js';
 import { openDb } from './db.js';
 import { createClient, runSearch, normalizeJob, passesFilters } from './scrape.js';
 
-const config = loadConfig();
-const only = process.argv.slice(2).flatMap((a) => a.split(/[\s,]+/)).filter(Boolean);
-const searches = only.length ? config.searches.filter((s) => only.includes(s.name)) : config.searches;
-if (searches.length === 0) {
-    console.error(`No search matches ${only.join(', ')}. Known: ${config.searches.map((s) => s.name).join(', ')}`);
+// In GitHub Actions, errors are also emitted as annotations so they show at the top of the run page.
+function reportError(message) {
+    console.error(`  ✖ ${message}`);
+    if (process.env.GITHUB_ACTIONS) console.log(`::error::${message.replace(/\r?\n/g, '%0A')}`);
+}
+
+function fatal(message) {
+    reportError(message);
     process.exit(1);
 }
 
-const client = createClient(requireEnv('APIFY_TOKEN'));
-const store = await openDb();
+let config, searches, client, store;
+try {
+    config = loadConfig();
+    const only = process.argv.slice(2).flatMap((a) => a.split(/[\s,]+/)).filter(Boolean);
+    searches = only.length ? config.searches.filter((s) => only.includes(s.name)) : config.searches;
+    if (searches.length === 0) {
+        fatal(`No search matches ${only.join(', ')}. Known: ${config.searches.map((s) => s.name).join(', ')}`);
+    }
+    client = createClient(requireEnv('APIFY_TOKEN'));
+    requireEnv('DATABASE_URL');
+} catch (err) {
+    fatal(err.message);
+}
+try {
+    store = await openDb();
+} catch (err) {
+    fatal(`Could not connect to the database: ${err.message}`);
+}
 const results = [];
 
 for (const search of searches) {
@@ -41,7 +60,7 @@ for (const search of searches) {
     } catch (err) {
         await store.finishRun(runId, { status: 'FAILED', apify_run_id: err.runId ?? null, error: err.message });
         results.push({ search: search.name, ok: false, error: err.message });
-        console.error(`  ✖ ${err.message}`);
+        reportError(`${search.name}: ${err.message}`);
     }
 }
 
