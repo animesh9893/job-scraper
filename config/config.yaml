@@ -1,0 +1,32 @@
+# Which Apify Actor to run. Swap this to change the job source.
+actor: curious_coder/linkedin-jobs-scraper
+
+# Label stored with every job, so jobs from different sources never collide.
+source: linkedin
+
+# Max seconds to wait for one Actor run before giving up.
+timeoutSecs: 900
+
+# Each search = one Actor run. `input` is passed to the Actor as-is,
+# so any field from the Actor's input schema works here.
+searches:
+  - name: backend-bangalore
+    input:
+      keywords: backend developer
+      location: Bangalore, Karnataka, India
+      datePosted: past24Hours
+      limitPerSource: 25
+      scrapeCompany: false
+
+  - name: react-india
+    input:
+      keywords: react developer
+      location: India
+      datePosted: past24Hours
+      limitPerSource: 25
+      scrapeCompany: false
+
+# Jobs matching these are dropped before they reach the DB (case-insensitive).
+filters:
+  excludeTitleWords: [intern, unpaid]
+  excludeCompanies: []

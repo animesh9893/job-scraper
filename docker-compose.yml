@@ -1,0 +1,6 @@
+services:
+  scraper:
+    build: .
+    env_file: .env
+    volumes:
+      - ./config:/app/config:ro   # edit searches without rebuilding

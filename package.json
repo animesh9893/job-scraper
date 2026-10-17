@@ -1,0 +1,19 @@
+{
+  "name": "job-scraper",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Fetch jobs via an Apify Actor and store them in a local SQLite DB",
+  "scripts": {
+    "scrape": "node src/run.js",
+    "stats": "node src/stats.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "apify-client": "^2.25.0",
+    "pg": "^8.23.1",
+    "yaml": "^2.9.1"
+  }
+}

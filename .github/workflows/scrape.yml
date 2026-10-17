@@ -1,0 +1,33 @@
+name: Scrape jobs
+
+on:
+  workflow_dispatch:            # "Run workflow" button in the Actions tab
+    inputs:
+      searches:
+        description: 'Search names from config.yaml, comma-separated (blank = all)'
+        required: false
+        default: ''
+  # schedule:                   # later: uncomment to run daily at 09:00 IST
+  #   - cron: '30 3 * * *'
+
+concurrency:
+  group: scrape                 # never run two scrapes at once
+  cancel-in-progress: false
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --omit=dev
+      - name: Scrape and store
+        run: node src/run.js "$SEARCHES"
+        env:
+          SEARCHES: ${{ inputs.searches }}
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
