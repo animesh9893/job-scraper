@@ -9,9 +9,14 @@ Run the flow by hand (a cron job later). It should:
 1. Fetch fresh jobs, starting with LinkedIn through an existing Apify Actor.
 2. Store them in Supabase (Postgres) without duplicates.
 3. *(later)* Extract skills and write a short post, e.g. "Company X is hiring for Y, skills: …" plus skill hashtags.
-4. *(later)* Publish to a **LinkedIn Company Page**, so the posts are not tied to the personal profile.
+4. **Public job board on GitHub Pages**: category and remote filters, shareable links. Built; turned on with `PUBLISH_SITE=true`.
+5. *(later)* Publish to a **LinkedIn Company Page**, so the posts are not tied to the personal profile.
 
-**Current scope:** steps 1–2 only. Posting and the UI (presentation layer) will be discussed later.
+**Current scope:** steps 1, 2 and 4. LinkedIn posting comes later.
+
+**Searches:** frontend, backend, fullstack and mobile × (India, India + remote), 20 jobs each, last 24 hours (`defaults` + `searches` in config.yaml). Jobs get a `category` from their search. `workplace` is `remote` if any remote search finds the job, or detected from title/location (remote/hybrid), otherwise NULL.
+
+**Job board:** `src/build-site.js` exports public fields of jobs first seen in the last 30 days to `site/jobs.json` and copies in `web/index.html` (vanilla JS: category tabs, workplace filter, search, filters kept in the URL, dark mode). The `publish` job in scrape.yml deploys it with actions/deploy-pages; it only runs when the repo variable `PUBLISH_SITE` is `true`. **Pages needs a public repo on a free plan** (or GitHub Pro); Settings → Pages → Source must be "GitHub Actions". URL: https://animesh9893.github.io/job-scraper/
 
 ---
 
@@ -49,14 +54,14 @@ job-scraper/
 ```
 
 ### Commands
-**GitHub:** Actions → *Scrape jobs* → *Run workflow* (blank = all searches, or `backend-bangalore,react-india`).
+**GitHub:** Actions → *Scrape jobs* → *Run workflow* (blank = all searches, or `backend-india,backend-remote`).
 
 **Local (optional):**
 ```bash
 cp .env.example .env                                   # APIFY_TOKEN, DATABASE_URL
 docker compose build
 docker compose run --rm scraper                        # all searches
-docker compose run --rm scraper src/run.js react-india # only some searches
+docker compose run --rm scraper src/run.js backend-remote # only some searches
 docker compose run --rm scraper src/stats.js           # DB summary
 ```
 

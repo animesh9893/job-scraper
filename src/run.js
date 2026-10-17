@@ -44,7 +44,7 @@ for (const search of searches) {
         const { items, runId: apifyRunId, costUsd } = await runSearch(client, config.actor, search, config.timeoutSecs);
 
         const jobs = items
-            .map((item) => normalizeJob(item, { source: config.source, searchName: search.name }))
+            .map((item) => normalizeJob(item, { source: config.source, search }))
             .filter(Boolean);
         const kept = jobs.filter((job) => passesFilters(job, config.filters));
         const added = await store.saveJobs(kept);

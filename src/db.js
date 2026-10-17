@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     company         TEXT,
     company_url     TEXT,
     location        TEXT,
+    category        TEXT,                        -- from the search: frontend | backend | fullstack | mobile
+    workplace       TEXT,                        -- remote | hybrid | NULL (on-site / not stated)
     url             TEXT,
     apply_url       TEXT,
     posted_at       TEXT,
@@ -24,6 +26,12 @@ CREATE TABLE IF NOT EXISTS jobs (
     PRIMARY KEY (source, job_id)
 );
 CREATE INDEX IF NOT EXISTS jobs_status ON jobs(status);
+
+-- Columns added after the first release; no-ops on new databases.
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS category TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS workplace TEXT;
+UPDATE jobs SET category = split_part(search_name, '-', 1)
+WHERE category IS NULL AND split_part(search_name, '-', 1) IN ('frontend', 'backend', 'fullstack', 'mobile');
 
 CREATE TABLE IF NOT EXISTS runs (
     id            BIGSERIAL PRIMARY KEY,
@@ -41,14 +49,19 @@ CREATE TABLE IF NOT EXISTS runs (
 );
 `;
 
-const JOB_COLUMNS = ['source', 'job_id', 'title', 'company', 'company_url', 'location', 'url', 'apply_url',
+const JOB_COLUMNS = ['source', 'job_id', 'title', 'company', 'company_url', 'location', 'category', 'workplace', 'url', 'apply_url',
     'posted_at', 'employment_type', 'seniority', 'salary', 'description', 'search_name', 'raw'];
 
 // xmax = 0 only for rows this statement inserted, so it tells new jobs apart from ones already stored.
+// A job seen again keeps its first category; it becomes remote if any search finds it as remote.
 const INSERT_JOB = `
     INSERT INTO jobs (${JOB_COLUMNS.join(', ')})
     VALUES (${JOB_COLUMNS.map((_, i) => `$${i + 1}`).join(', ')})
-    ON CONFLICT (source, job_id) DO UPDATE SET last_seen_at = now()
+    ON CONFLICT (source, job_id) DO UPDATE SET
+        last_seen_at = now(),
+        category = COALESCE(jobs.category, EXCLUDED.category),
+        workplace = CASE WHEN EXCLUDED.workplace = 'remote' THEN 'remote'
+                         ELSE COALESCE(jobs.workplace, EXCLUDED.workplace) END
     RETURNING (xmax = 0) AS inserted
 `;
 

@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tech Jobs</title>
+<meta name="description" content="Fresh frontend, backend, full stack and mobile developer jobs in India and remote, updated regularly.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💼</text></svg>">
+<style>
+  :root {
+    --bg: #f7f7f5; --surface: #ffffff; --text: #1d1d1b; --muted: #6b6b66; --border: #e4e4df;
+    --accent: #2f5bd3; --on-accent: #ffffff; --accent-soft: #e8eefc; --chip: #f0f0ec;
+    --remote: #0f7b4f; --remote-soft: #e3f4ec; --hybrid: #8a5a00; --hybrid-soft: #fbf0d9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141413; --surface: #1d1d1b; --text: #ecece8; --muted: #a0a09a; --border: #2e2e2b;
+      --accent: #8aa8ff; --on-accent: #10172b; --accent-soft: #1f2a48; --chip: #262624;
+      --remote: #5fd3a0; --remote-soft: #16352a; --hybrid: #e8b860; --hybrid-soft: #3a2e14;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 32px 16px 64px; }
+  header h1 { margin: 0 0 4px; font-size: 26px; letter-spacing: -0.02em; }
+  header p { margin: 0; color: var(--muted); }
+
+  .controls { margin: 24px 0 8px; display: grid; gap: 12px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .tab {
+    border: 1px solid var(--border); background: var(--surface); color: var(--text);
+    padding: 6px 14px; border-radius: 999px; font: inherit; font-size: 14px; cursor: pointer;
+  }
+  .tab:hover { border-color: var(--accent); }
+  .tab[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .tab .n { opacity: .7; font-size: 12px; margin-left: 4px; }
+  input[type="search"] {
+    width: 100%; padding: 10px 14px; font: inherit; color: var(--text);
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  }
+  input[type="search"]:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .count { color: var(--muted); font-size: 14px; margin: 16px 0 8px; }
+
+  ul.jobs { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  .job {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 16px; display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; align-items: start;
+  }
+  .job > div { grid-row: span 2; min-width: 0; }
+  .job h2 { margin: 0; font-size: 16px; line-height: 1.35; }
+  .job h2 a { color: var(--text); text-decoration: none; }
+  .job h2 a:hover { color: var(--accent); text-decoration: underline; }
+  .meta { color: var(--muted); font-size: 14px; }
+  .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .badge { font-size: 12px; padding: 2px 8px; border-radius: 6px; background: var(--chip); color: var(--muted); }
+  .badge.cat { background: var(--accent-soft); color: var(--accent); }
+  .badge.remote { background: var(--remote-soft); color: var(--remote); }
+  .badge.hybrid { background: var(--hybrid-soft); color: var(--hybrid); }
+  .when { color: var(--muted); font-size: 13px; white-space: nowrap; }
+  .apply {
+    grid-column: 2; justify-self: end; align-self: end; font-size: 14px;
+    color: var(--accent); text-decoration: none; white-space: nowrap;
+  }
+  .apply:hover { text-decoration: underline; }
+  .empty { text-align: center; color: var(--muted); padding: 48px 0; }
+  footer { margin-top: 32px; color: var(--muted); font-size: 13px; }
+  @media (max-width: 560px) {
+    .job { grid-template-columns: 1fr; }
+    .job > div { grid-row: auto; }
+    .when, .apply { grid-column: 1; justify-self: start; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 id="title">Tech Jobs</h1>
+    <p>Frontend, backend, full stack and mobile developer jobs in India and remote.</p>
+  </header>
+
+  <div class="controls">
+    <div class="row" id="categories" role="group" aria-label="Category"></div>
+    <div class="row" id="workplaces" role="group" aria-label="Workplace"></div>
+    <input type="search" id="q" placeholder="Search title, company or location…" aria-label="Search jobs">
+  </div>
+
+  <p class="count" id="count" aria-live="polite">Loading jobs…</p>
+  <ul class="jobs" id="list"></ul>
+
+  <footer id="footer"></footer>
+</div>
+
+<script>
+const CATEGORIES = [
+  ['all', 'All'], ['frontend', 'Frontend'], ['backend', 'Backend'], ['fullstack', 'Full stack'], ['mobile', 'Mobile'],
+];
+const WORKPLACES = [['all', 'Anywhere'], ['remote', 'Remote'], ['hybrid', 'Hybrid'], ['onsite', 'On-site / not stated']];
+const LABEL = Object.fromEntries(CATEGORIES);
+
+const state = { category: 'all', workplace: 'all', q: '' };
+let jobs = [];
+
+const el = (tag, props = {}, ...children) => {
+  const node = Object.assign(document.createElement(tag), props);
+  node.append(...children.filter(Boolean));
+  return node;
+};
+
+// Only link out to http(s) URLs.
+const safeUrl = (u) => { try { const x = new URL(u); return /^https?:$/.test(x.protocol) ? x.href : null; } catch { return null; } };
+
+function timeAgo(dateStr) {
+  if (!dateStr) return '';
+  const days = Math.floor((Date.now() - new Date(dateStr)) / 86400000);
+  if (Number.isNaN(days)) return '';
+  if (days <= 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  if (days < 30) return `${days} days ago`;
+  return new Date(dateStr).toLocaleDateString();
+}
+
+const matchesWorkplace = (j, w) => w === 'all' || (w === 'onsite' ? !j.workplace : j.workplace === w);
+const matchesQuery = (j, q) => !q || [j.title, j.company, j.location].some((v) => v && v.toLowerCase().includes(q));
+
+function renderButtons(container, options, key, countFor) {
+  container.replaceChildren(...options.map(([value, label]) => {
+    const n = countFor(value);
+    const b = el('button', { className: 'tab', type: 'button' }, label, el('span', { className: 'n', textContent: n }));
+    b.setAttribute('aria-pressed', state[key] === value);
+    b.onclick = () => { state[key] = value; sync(); };
+    return b;
+  }));
+}
+
+function jobItem(j) {
+  const url = safeUrl(j.url);
+  const badges = [
+    j.category && el('span', { className: 'badge cat', textContent: LABEL[j.category] ?? j.category }),
+    j.workplace && el('span', { className: `badge ${j.workplace}`, textContent: j.workplace === 'remote' ? 'Remote' : 'Hybrid' }),
+    j.seniority && j.seniority !== 'Not Applicable' && el('span', { className: 'badge', textContent: j.seniority }),
+    j.employmentType && el('span', { className: 'badge', textContent: j.employmentType }),
+  ];
+  return el('li', { className: 'job' },
+    el('div', {},
+      el('h2', {}, url ? el('a', { href: url, target: '_blank', rel: 'noopener nofollow', textContent: j.title }) : j.title),
+      el('div', { className: 'meta', textContent: [j.company, j.location].filter(Boolean).join(' · ') }),
+      el('div', { className: 'badges' }, ...badges),
+    ),
+    el('span', { className: 'when', textContent: timeAgo(j.postedAt || j.firstSeenAt) }),
+    url && el('a', { className: 'apply', href: url, target: '_blank', rel: 'noopener nofollow', textContent: 'View job ↗' }),
+  );
+}
+
+function render() {
+  const q = state.q.trim().toLowerCase();
+  const base = jobs.filter((j) => matchesQuery(j, q));
+  const byCat = (c) => base.filter((j) => c === 'all' || j.category === c);
+
+  renderButtons(document.getElementById('categories'), CATEGORIES, 'category',
+    (c) => byCat(c).filter((j) => matchesWorkplace(j, state.workplace)).length);
+  renderButtons(document.getElementById('workplaces'), WORKPLACES, 'workplace',
+    (w) => byCat(state.category).filter((j) => matchesWorkplace(j, w)).length);
+
+  const shown = byCat(state.category).filter((j) => matchesWorkplace(j, state.workplace));
+  document.getElementById('count').textContent = `${shown.length} job${shown.length === 1 ? '' : 's'}`;
+  document.getElementById('list').replaceChildren(
+    ...(shown.length ? shown.map(jobItem) : [el('li', { className: 'empty', textContent: 'No jobs match these filters.' })]),
+  );
+}
+
+// Filters live in the URL (?category=backend&workplace=remote&q=react) so filtered views can be shared.
+function sync() {
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(state)) if (v && v !== 'all') params.set(k, v);
+  history.replaceState(null, '', params.size ? `?${params}` : location.pathname);
+  render();
+}
+
+function readUrl() {
+  const p = new URLSearchParams(location.search);
+  if (CATEGORIES.some(([v]) => v === p.get('category'))) state.category = p.get('category');
+  if (WORKPLACES.some(([v]) => v === p.get('workplace'))) state.workplace = p.get('workplace');
+  state.q = p.get('q') ?? '';
+  document.getElementById('q').value = state.q;
+}
+
+document.getElementById('q').addEventListener('input', (e) => { state.q = e.target.value; sync(); });
+
+fetch('jobs.json', { cache: 'no-cache' })
+  .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
+  .then((data) => {
+    jobs = data.jobs;
+    if (data.title) { document.title = data.title; document.getElementById('title').textContent = data.title; }
+    document.getElementById('footer').textContent =
+      `Updated ${new Date(data.generatedAt).toLocaleString()}. Listings link to the original job posts; apply there.`;
+    readUrl();
+    render();
+  })
+  .catch(() => { document.getElementById('count').textContent = 'Could not load jobs. Please try again later.'; });
+</script>
+</body>
+</html>

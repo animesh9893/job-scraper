@@ -23,7 +23,7 @@ export function createClient(token) {
  * Maps one Actor item to a DB row. Field names follow curious_coder/linkedin-jobs-scraper,
  * with fallbacks for common alternatives so other job Actors mostly work too.
  */
-export function normalizeJob(item, { source, searchName }) {
+export function normalizeJob(item, { source, search }) {
     const pick = (...keys) => keys.map((k) => item[k]).find((v) => v !== undefined && v !== null && v !== '') ?? null;
 
     const stripQuery = (u) => (u ? u.split('?')[0] : null);
@@ -31,13 +31,18 @@ export function normalizeJob(item, { source, searchName }) {
     const jobId = pick('id', 'jobId') ?? url;
     if (!jobId) return null;
 
+    const title = pick('title', 'jobTitle', 'positionName');
+    const location = pick('location', 'jobLocation');
+
     return {
         source,
         job_id: String(jobId),
-        title: pick('title', 'jobTitle', 'positionName'),
+        title,
         company: pick('companyName', 'company'),
         company_url: stripQuery(pick('companyLinkedinUrl', 'companyUrl')),
-        location: pick('location', 'jobLocation'),
+        location,
+        category: search.category ?? null,
+        workplace: search.workplace ?? detectWorkplace(`${title ?? ''} ${location ?? ''}`),
         url,
         apply_url: pick('applyUrl'),
         posted_at: pick('postedAt', 'publishedAt', 'postingDateParsed'),
@@ -45,9 +50,16 @@ export function normalizeJob(item, { source, searchName }) {
         seniority: pick('seniorityLevel', 'experienceLevel'),
         salary: pick('salary', 'salaryInfo'),
         description: cleanText(pick('descriptionText', 'description')),
-        search_name: searchName,
+        search_name: search.name,
         raw: item,
     };
+}
+
+/** Title/location only: descriptions mention "remote" too loosely to rely on. */
+function detectWorkplace(text) {
+    if (/\bremote\b|work from home|\bwfh\b/i.test(text)) return 'remote';
+    if (/\bhybrid\b/i.test(text)) return 'hybrid';
+    return null;
 }
 
 const ENTITIES = { nbsp: ' ', amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", '#39': "'" };

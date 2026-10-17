@@ -6,7 +6,8 @@
   "description": "Fetch jobs via an Apify Actor and store them in a local SQLite DB",
   "scripts": {
     "scrape": "node src/run.js",
-    "stats": "node src/stats.js"
+    "stats": "node src/stats.js",
+    "build-site": "node src/build-site.js"
   },
   "engines": {
     "node": ">=20"

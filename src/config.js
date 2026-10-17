@@ -18,7 +18,9 @@ export function loadConfig() {
         source: 'linkedin',
         timeoutSecs: 900,
         ...config,
+        searches: config.searches.map((s) => ({ ...s, input: { ...config.defaults, ...s.input } })),
         filters: { excludeTitleWords: [], excludeCompanies: [], ...config.filters },
+        site: { title: 'Tech Jobs', maxAgeDays: 30, maxJobs: 1000, ...config.site },
     };
 }
 

@@ -7,26 +7,56 @@ source: linkedin
 # Max seconds to wait for one Actor run before giving up.
 timeoutSecs: 900
 
-# Each search = one Actor run. `input` is passed to the Actor as-is,
-# so any field from the Actor's input schema works here.
-searches:
-  - name: backend-bangalore
-    input:
-      keywords: backend developer
-      location: Bangalore, Karnataka, India
-      datePosted: past24Hours
-      limitPerSource: 25
-      scrapeCompany: false
+# Merged into every search's `input` (a search's own values win).
+defaults:
+  location: India
+  datePosted: past24Hours
+  limitPerSource: 20
+  scrapeCompany: false
 
-  - name: react-india
-    input:
-      keywords: react developer
-      location: India
-      datePosted: past24Hours
-      limitPerSource: 25
-      scrapeCompany: false
+# Each search = one Actor run. `input` is passed to the Actor (after merging `defaults`),
+# so any field from the Actor's input schema works here.
+# `category` groups jobs on the site; `workplace: remote` marks every job found by that search as remote.
+searches:
+  - name: frontend-india
+    category: frontend
+    input: { keywords: frontend developer }
+  - name: frontend-remote
+    category: frontend
+    workplace: remote
+    input: { keywords: frontend developer remote }
+
+  - name: backend-india
+    category: backend
+    input: { keywords: backend developer }
+  - name: backend-remote
+    category: backend
+    workplace: remote
+    input: { keywords: backend developer remote }
+
+  - name: fullstack-india
+    category: fullstack
+    input: { keywords: full stack developer }
+  - name: fullstack-remote
+    category: fullstack
+    workplace: remote
+    input: { keywords: full stack developer remote }
+
+  - name: mobile-india
+    category: mobile
+    input: { keywords: mobile app developer android ios }
+  - name: mobile-remote
+    category: mobile
+    workplace: remote
+    input: { keywords: mobile app developer remote }
 
 # Jobs matching these are dropped before they reach the DB (case-insensitive).
 filters:
   excludeTitleWords: [intern, unpaid]
   excludeCompanies: []
+
+# Public job board (GitHub Pages)
+site:
+  title: India & Remote Tech Jobs
+  maxAgeDays: 30        # only list jobs first seen in the last N days
+  maxJobs: 1000
