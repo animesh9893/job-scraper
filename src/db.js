@@ -121,6 +121,33 @@ DO $$ BEGIN
         REVOKE ALL ON runs, apify_tokens FROM anon, authenticated;
     END IF;
 END $$;
+
+-- Telegram alerts: who wants which keywords (written by the bot webhook web/api/telegram.mjs), and which
+-- jobs each subscriber already got (src/telegram-notify.js). Private: RLS with no policies.
+CREATE TABLE IF NOT EXISTS telegram_subscribers (
+    chat_id      BIGINT PRIMARY KEY,
+    username     TEXT,
+    keywords     JSONB NOT NULL DEFAULT '[]',     -- [{"text": "react.js", "anywhere": false}]
+    locations    TEXT[] NOT NULL DEFAULT '{}',    -- e.g. {remote, bengaluru}; empty = anywhere
+    is_active    BOOLEAN NOT NULL DEFAULT true,   -- false after /stop or when the user blocks the bot
+    last_sent_at TIMESTAMPTZ,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS telegram_sent (
+    chat_id BIGINT NOT NULL REFERENCES telegram_subscribers (chat_id) ON DELETE CASCADE,
+    source  TEXT NOT NULL,
+    job_id  TEXT NOT NULL,
+    sent_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (chat_id, source, job_id)
+);
+ALTER TABLE telegram_subscribers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE telegram_sent ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+        REVOKE ALL ON telegram_subscribers, telegram_sent FROM anon, authenticated;
+    END IF;
+END $$;
 `;
 
 const JOB_COLUMNS = ['source', 'job_id', 'title', 'company', 'company_url', 'location', 'category', 'workplace', 'url', 'apply_url',
