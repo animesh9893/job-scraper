@@ -1,5 +1,6 @@
 import pg from 'pg';
 import { requireEnv } from './config.js';
+import { CATEGORIES, SEARCHES } from './seed-data.js';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS jobs (
@@ -33,7 +34,31 @@ ALTER TABLE jobs ADD COLUMN IF NOT EXISTS workplace TEXT;
 UPDATE jobs SET category = split_part(search_name, '-', 1)
 WHERE category IS NULL AND split_part(search_name, '-', 1) IN ('frontend', 'backend', 'fullstack', 'mobile');
 
--- The website reads only this view, with Supabase's public anon key. The base tables have RLS on
+-- Tags shown as tabs on the site; searches.category points here.
+CREATE TABLE IF NOT EXISTS categories (
+    slug       TEXT PRIMARY KEY,                 -- e.g. frontend
+    label      TEXT NOT NULL,                    -- e.g. Frontend
+    sort_order INTEGER NOT NULL DEFAULT 100      -- tab order, lowest first
+);
+
+-- One row per Actor run to do. Each scrape takes the few searches that ran longest ago
+-- (config searchesPerRun), so a limited Apify budget rotates through all of them.
+CREATE TABLE IF NOT EXISTS searches (
+    name        TEXT PRIMARY KEY,                -- e.g. backend-remote
+    category    TEXT REFERENCES categories (slug) ON UPDATE CASCADE,
+    workplace   TEXT CHECK (workplace IN ('remote', 'hybrid')), -- marks every job it finds
+    input       JSONB NOT NULL DEFAULT '{}',     -- Actor input, merged over config defaults
+    is_active   BOOLEAN NOT NULL DEFAULT true,
+    priority    INTEGER NOT NULL DEFAULT 100,    -- lower runs first among equally stale searches
+    last_run_at TIMESTAMPTZ,
+    last_status TEXT,                            -- SUCCEEDED | FAILED
+    last_error  TEXT,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE searches ENABLE ROW LEVEL SECURITY;
+
+-- The website reads only these views, with Supabase's public anon key. The base tables have RLS on
 -- and no policies, so that key can't read raw data, descriptions or runs. The view runs as its
 -- owner, which is why it can still read jobs.
 ALTER TABLE jobs ENABLE ROW LEVEL SECURITY;
@@ -43,11 +68,16 @@ CREATE OR REPLACE VIEW public_jobs AS
            first_seen_at AS "firstSeenAt"
     FROM jobs
     WHERE status <> 'skipped' AND first_seen_at > now() - interval '30 days';
+CREATE OR REPLACE VIEW public_categories AS
+    SELECT slug, label, sort_order FROM categories;
+-- Tab counts, so the site doesn't have to download every job to count them.
+CREATE OR REPLACE VIEW public_job_counts AS
+    SELECT category, workplace, COUNT(*)::int AS n FROM public_jobs GROUP BY category, workplace;
 DO $$ BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
-        REVOKE ALL ON jobs FROM anon, authenticated;
-        REVOKE ALL ON public_jobs FROM anon, authenticated;
-        GRANT SELECT ON public_jobs TO anon, authenticated;
+        REVOKE ALL ON jobs, categories, searches FROM anon, authenticated;
+        REVOKE ALL ON public_jobs, public_categories, public_job_counts FROM anon, authenticated;
+        GRANT SELECT ON public_jobs, public_categories, public_job_counts TO anon, authenticated;
     END IF;
 END $$;
 
@@ -92,6 +122,7 @@ export async function openDb() {
         max: 2,
     });
     await pool.query(SCHEMA);
+    await seedIfEmpty(pool);
 
     return {
         query: (text, params) => pool.query(text, params),
@@ -114,6 +145,29 @@ export async function openDb() {
             } finally {
                 client.release();
             }
+        },
+
+        /**
+         * Active searches to run now: the given names, or else the `limit` that ran longest ago
+         * (never-run first). Each comes back as { name, category, workplace, input }.
+         */
+        async pickSearches({ names = [], limit }) {
+            const { rows } = names.length
+                ? await pool.query('SELECT * FROM searches WHERE name = ANY($1) ORDER BY name', [names])
+                : await pool.query(
+                    `SELECT * FROM searches WHERE is_active
+                     ORDER BY last_run_at ASC NULLS FIRST, priority, name LIMIT $1`, [limit]);
+            return rows;
+        },
+
+        async allSearchNames() {
+            return (await pool.query('SELECT name FROM searches ORDER BY name')).rows.map((r) => r.name);
+        },
+
+        async markSearch(name, status, error = null) {
+            await pool.query(
+                'UPDATE searches SET last_run_at = now(), last_status = $2, last_error = $3 WHERE name = $1',
+                [name, status, error]);
         },
 
         async startRun(searchName, actor) {
@@ -139,4 +193,25 @@ export async function openDb() {
 
         close: () => pool.end(),
     };
+}
+
+/** On a fresh database (no categories yet), inserts the starting categories and searches. */
+export async function seedIfEmpty(pool) {
+    const { rows } = await pool.query('SELECT EXISTS (SELECT 1 FROM categories) AS seeded');
+    if (rows[0].seeded) return;
+    await seed(pool);
+}
+
+/** Inserts the starting categories and searches; existing rows with the same name are kept. */
+export async function seed(pool) {
+    for (const c of CATEGORIES) {
+        await pool.query(
+            'INSERT INTO categories (slug, label, sort_order) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+            [c.slug, c.label, c.sort_order]);
+    }
+    for (const s of SEARCHES) {
+        await pool.query(
+            'INSERT INTO searches (name, category, workplace, input) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING',
+            [s.name, s.category ?? null, s.workplace ?? null, s.input]);
+    }
 }

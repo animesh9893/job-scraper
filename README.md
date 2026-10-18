@@ -3,8 +3,10 @@
 Fetches jobs with an Apify Actor (default: `curious_coder/linkedin-jobs-scraper`), stores them in
 Supabase (Postgres) and publishes a public job board on GitHub Pages.
 
-Current searches: frontend, backend, full stack and mobile developer jobs in India, each in an
-"any workplace" and a "remote" variant (8 searches, up to 20 jobs each, about $0.30 per full run).
+Searches and categories (the tabs on the site) live in Supabase. The first run adds 8 starting
+searches: frontend, backend, full stack and mobile developer jobs in India, each in an "any workplace"
+and a "remote" variant. Each run does only `searchesPerRun` of them (default 2, about $0.08), the ones
+that ran longest ago first, so a limited Apify budget rotates through every search.
 
 ## Run it on GitHub (no local setup)
 
@@ -14,14 +16,35 @@ Current searches: frontend, backend, full stack and mobile developer jobs in Ind
 2. **GitHub secrets**: repo → Settings → Secrets and variables → Actions → New repository secret:
    - `APIFY_TOKEN`: Apify Console → Settings → API & Integrations
    - `DATABASE_URL`: the Supabase connection string from step 1
-3. **Run**: Actions tab → **Scrape jobs** → **Run workflow**. Leave "searches" blank to run all of them,
-   or enter names like `backend-india,backend-remote`.
+3. **Run**: Actions tab → **Scrape jobs** → **Run workflow**. Leave "searches" blank to run the next
+   few in the rotation, enter names like `backend-india,backend-remote`, or `all` for every active search.
 
 The run page shows a results table (found / new / filtered / cost per search).
-Browse the data in Supabase → **Table Editor** → `jobs` and `runs`.
+Browse the data in Supabase → **Table Editor** → `jobs`, `searches`, `categories` and `runs`.
 Tables are created automatically on the first run.
 
-To run it on a schedule later, uncomment `schedule:` in `.github/workflows/scrape.yml`.
+To work through the rotation on its own, uncomment `schedule:` in `.github/workflows/scrape.yml`.
+With 8 searches and 2 per run, every search runs once every 4 runs.
+
+## Searches and categories
+
+Add or change them with `src/searches.js` (needs `DATABASE_URL`, locally or via Docker), or edit
+the `searches` and `categories` tables in Supabase's Table Editor.
+
+```bash
+node src/searches.js                                  # list, the ones at the top run next
+node src/searches.js add react-bangalore --keywords "react developer" \
+     --category frontend --location "Bangalore, Karnataka, India"
+node src/searches.js add devops-remote --keywords "devops engineer remote" --category devops --workplace remote
+node src/searches.js category devops DevOps 50        # add a tab (slug, label, order)
+node src/searches.js disable mobile-remote            # pause; enable brings it back
+node src/searches.js remove mobile-remote
+```
+
+A search's `input` is passed to the Actor, merged over `defaults` in `config.yaml`, so any Actor
+field works: `--input '{"datePosted":"pastWeek","limitPerSource":50}'`. `--priority` (default 100)
+decides the order among searches that ran equally long ago, lower first. A new search runs in the
+next scrape. With Docker: `docker compose run --rm scraper src/searches.js list`.
 
 ## Public job board on Vercel (live from Supabase)
 
@@ -58,8 +81,10 @@ After each scrape, the `publish` job builds a static page from the DB (`web/inde
    link also shows on the run page.
 
 What the page has:
-- Category tabs (Frontend / Backend / Full stack / Mobile), workplace filter (Remote / Hybrid /
-  On-site), search box, and counts on each filter.
+- Category tabs from the `categories` table, workplace filter (Remote / Hybrid / On-site), search
+  box, and counts on each filter.
+- Jobs load 25 at a time as you scroll, filtered in Supabase, so the page stays fast as the list grows.
+  Cards off screen are skipped by the browser's renderer.
 - Filters are kept in the URL, so you can share views like `…/job-scraper/?category=backend&workplace=remote`.
 - Only public listing fields are published (title, company, location, category, workplace, job
   link, dates). No descriptions, raw data or job-poster details.
@@ -72,8 +97,9 @@ Preview locally: `DATABASE_URL=... node src/build-site.js && npx serve site`
 ```bash
 cp .env.example .env            # fill in APIFY_TOKEN and DATABASE_URL
 docker compose build
-docker compose run --rm scraper                        # all searches
-docker compose run --rm scraper src/run.js backend-remote # only some
+docker compose run --rm scraper                        # next searches in the rotation
+docker compose run --rm scraper src/run.js backend-remote # only some (or: all)
+docker compose run --rm scraper src/searches.js        # list / add searches
 docker compose run --rm scraper src/stats.js           # DB summary
 ```
 
@@ -83,23 +109,24 @@ Without Docker: `npm install`, then `npm run scrape` / `npm run stats` (with the
 
 Edit `config/config.yaml`:
 - `defaults`: Actor input shared by all searches (location India, last 24 hours, 20 jobs each).
-- `searches`: each entry is one Actor run. Its `input` is merged over `defaults` and passed to the Actor.
-  `category` groups jobs on the site; `workplace: remote` marks every job that search finds as remote
-  (other jobs are marked remote or hybrid if their title or location says so).
+- `searchesPerRun`: how many searches each scrape runs (see Searches and categories above).
+  A search's `category` groups its jobs on the site; `workplace: remote` marks every job it finds as
+  remote (other jobs are marked remote or hybrid if their title or location says so).
 - `site`: page title, how many days of jobs to show, max jobs.
 - `filters`: drop jobs by title words or company name.
 - `actor` / `source`: change the job source.
 
 ## How it works
 
-For each search:
+Picks the `searchesPerRun` active searches with the oldest `last_run_at` (never-run first). For each:
 1. Runs the Actor and waits for it to finish.
 2. Maps each item to a job row (`normalizeJob` in `src/scrape.js`). HTML entities are decoded and
    tracking parameters are stripped from URLs.
 3. Drops jobs matching `filters`.
 4. Inserts new jobs with `status = 'new'`. A job already stored (same `source` + `job_id`) only
    gets `last_seen_at` updated, so nothing is stored twice.
-5. Logs the run (counts, Apify run ID, cost, error) in `runs`.
+5. Logs the run (counts, Apify run ID, cost, error) in `runs`, and sets the search's `last_run_at`
+   and `last_status`, which moves it to the back of the rotation (failed ones too).
 
 If one search fails, the others still run; the command then exits with code 1, so the workflow shows as failed.
 
@@ -107,7 +134,11 @@ If one search fails, the others still run; the command then exits with code 1, s
 
 - `jobs`: title, company, company_url, location, category, workplace, url, apply_url, posted_at, employment_type,
   seniority, salary, description, `raw` (the full Actor item as JSONB), status, first/last seen.
+- `searches`: name, category, workplace, Actor `input`, is_active, priority, last run time and status.
+- `categories`: slug, label, sort_order (the site's tabs).
 - `runs`: one row per search per run.
+- Views for the site (the only things the public key can read): `public_jobs`, `public_categories`,
+  `public_job_counts`.
 
 ## Workflows
 

@@ -4,7 +4,7 @@ on:
   workflow_dispatch:            # "Run workflow" button in the Actions tab
     inputs:
       searches:
-        description: 'Search names from config.yaml, comma-separated (blank = all)'
+        description: 'Search names, comma-separated (blank = next in rotation, all = every active search)'
         required: false
         default: ''
   # schedule:                   # later: uncomment to run daily at 09:00 IST

@@ -72,10 +72,10 @@
   }
   .job:hover .apply { text-decoration: underline; }
   .empty { text-align: center; color: var(--muted); padding: 48px 0; }
-  .pager { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 16px; }
-  .pager[hidden] { display: none; }
-  .pager span { color: var(--muted); font-size: 14px; }
-  .tab:disabled { opacity: .45; cursor: default; border-color: var(--border); }
+  /* Off-screen cards skip layout and paint, so a long list stays smooth to scroll. */
+  .job { content-visibility: auto; contain-intrinsic-size: auto 96px; }
+  .more { text-align: center; color: var(--muted); font-size: 14px; padding: 16px 0; }
+  .more[hidden] { display: none; }
   footer { margin-top: 32px; color: var(--muted); font-size: 13px; }
   @media (max-width: 560px) {
     .job { grid-template-columns: 1fr; }
@@ -99,27 +99,26 @@
 
   <p class="count" id="count" aria-live="polite">Loading jobs…</p>
   <ul class="jobs" id="list"></ul>
-  <nav class="pager" id="pager" aria-label="Pages" hidden>
-    <button class="tab" type="button" id="prev">← Newer</button>
-    <span id="page"></span>
-    <button class="tab" type="button" id="next">Older →</button>
-  </nav>
+  <div class="more" id="more" hidden>Loading more jobs…</div>
 
   <footer id="footer"></footer>
 </div>
 
 <script src="config.js"></script>
 <script>
-const CATEGORIES = [
-  ['all', 'All'], ['frontend', 'Frontend'], ['backend', 'Backend'], ['fullstack', 'Full stack'], ['mobile', 'Mobile'],
-];
-const WORKPLACES = [['all', 'Anywhere'], ['remote', 'Remote'], ['hybrid', 'Hybrid'], ['onsite', 'On-site / not stated']];
-const LABEL = Object.fromEntries(CATEGORIES);
-
 const PAGE_SIZE = 25;
-const state = { category: 'all', workplace: 'all', q: '', page: 1 };
-let jobs = [];
+const WORKPLACES = [['all', 'Anywhere'], ['remote', 'Remote'], ['hybrid', 'Hybrid'], ['onsite', 'On-site / not stated']];
+let CATEGORIES = [['all', 'All']];   // filled from the categories table
+const FALLBACK_CATEGORIES = [['frontend', 'Frontend'], ['backend', 'Backend'], ['fullstack', 'Full stack'], ['mobile', 'Mobile']]
+  .map(([slug, label]) => ({ slug, label }));
+let LABEL = {};
 
+const state = { category: 'all', workplace: 'all', q: '' };
+let source;        // where jobs come from: Supabase or jobs.json, same interface
+let counts = [];   // [{ category, workplace, n }] for the tab counts
+const list = { shown: 0, total: null, loading: false, generation: 0 };
+
+const $ = (id) => document.getElementById(id);
 const el = (tag, props = {}, ...children) => {
   const node = Object.assign(document.createElement(tag), props);
   node.append(...children.filter(Boolean));
@@ -140,17 +139,76 @@ function fetchedAgo(dateStr) {
   return `Fetched ${new Date(dateStr).toLocaleDateString()}`;
 }
 
-const matchesWorkplace = (j, w) => w === 'all' || (w === 'onsite' ? !j.workplace : j.workplace === w);
-const matchesQuery = (j, q) => !q || [j.title, j.company, j.location].some((v) => v && v.toLowerCase().includes(q));
+const matchesCategory = (category, c) => c === 'all' || category === c;
+const matchesWorkplace = (workplace, w) => w === 'all' || (w === 'onsite' ? !workplace : workplace === w);
+// Drops characters that have a meaning in Supabase filters.
+const cleanQuery = (q) => q.replace(/[,()*%\\"]/g, ' ').replace(/\s+/g, ' ').trim();
 
+/** Reads jobs live from the Supabase views, PAGE_SIZE at a time, filtered in the database. */
+async function supabaseSource() {
+  const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm');
+  const db = createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY, { auth: { persistSession: false } });
+  const run = async (query) => { const { data, count, error } = await query; if (error) throw error; return { data, count }; };
+  return {
+    footer: 'Live listings, updated after every scrape. They link to the original job posts; apply there.',
+    categories: async () => (await run(db.from('public_categories').select('slug, label').order('sort_order').order('slug'))).data,
+    counts: async () => (await run(db.from('public_job_counts').select('*'))).data,
+    async page(f, offset) {
+      let query = db.from('public_jobs').select('*', offset === 0 ? { count: 'exact' } : {})
+        .order('firstSeenAt', { ascending: false }).order('id')   // id breaks ties, so pages never overlap
+        .range(offset, offset + PAGE_SIZE - 1);
+      if (f.category !== 'all') query = query.eq('category', f.category);
+      if (f.workplace === 'onsite') query = query.is('workplace', null);
+      else if (f.workplace !== 'all') query = query.eq('workplace', f.workplace);
+      const q = cleanQuery(f.q);
+      if (q) query = query.or(['title', 'company', 'location'].map((c) => `${c}.ilike.*${q}*`).join(','));
+      const { data, count } = await run(query);
+      return { jobs: data, total: count };
+    },
+  };
+}
+
+/** Same interface over jobs.json (built by src/build-site.js), filtered in the browser. */
+async function jsonSource() {
+  const r = await fetch('jobs.json', { cache: 'no-cache' });
+  if (!r.ok) throw new Error(r.status);
+  const data = await r.json();
+  const tally = new Map();
+  for (const j of data.jobs) {
+    const key = `${j.category}|${j.workplace}`;
+    tally.set(key, { category: j.category, workplace: j.workplace, n: (tally.get(key)?.n ?? 0) + 1 });
+  }
+  return {
+    title: data.title,
+    footer: `Updated ${new Date(data.generatedAt).toLocaleString()}. Listings link to the original job posts; apply there.`,
+    categories: async () => data.categories ?? [...new Set(data.jobs.map((j) => j.category).filter(Boolean))].map((slug) => ({ slug, label: slug })),
+    counts: async () => [...tally.values()],
+    async page(f, offset) {
+      const q = cleanQuery(f.q).toLowerCase();
+      const all = data.jobs.filter((j) => matchesCategory(j.category, f.category) && matchesWorkplace(j.workplace, f.workplace) &&
+        (!q || [j.title, j.company, j.location].some((v) => v && v.toLowerCase().includes(q))));
+      return { jobs: all.slice(offset, offset + PAGE_SIZE), total: all.length };
+    },
+  };
+}
+
+// Tab counts come from the counts view; while searching they'd be wrong, so they're hidden.
 function renderButtons(container, options, key, countFor) {
   container.replaceChildren(...options.map(([value, label]) => {
-    const n = countFor(value);
-    const b = el('button', { className: 'tab', type: 'button' }, label, el('span', { className: 'n', textContent: n }));
+    const b = el('button', { className: 'tab', type: 'button' }, label,
+      !state.q.trim() && el('span', { className: 'n', textContent: countFor(value) }));
     b.setAttribute('aria-pressed', state[key] === value);
-    b.onclick = () => { state[key] = value; state.page = 1; sync(); };
+    b.onclick = () => { state[key] = value; sync(); };
     return b;
   }));
+}
+
+function renderTabs() {
+  const sum = (pred) => counts.filter(pred).reduce((n, r) => n + r.n, 0);
+  renderButtons($('categories'), CATEGORIES, 'category',
+    (c) => sum((r) => matchesCategory(r.category, c) && matchesWorkplace(r.workplace, state.workplace)));
+  renderButtons($('workplaces'), WORKPLACES, 'workplace',
+    (w) => sum((r) => matchesCategory(r.category, state.category) && matchesWorkplace(r.workplace, w)));
 }
 
 function jobItem(j) {
@@ -167,42 +225,56 @@ function jobItem(j) {
       el('div', { className: 'meta', textContent: [j.company, j.location].filter(Boolean).join(' · ') }),
       el('div', { className: 'badges' }, ...badges),
     ),
-    el('span', { className: 'when', textContent: fetchedAgo(j.firstSeenAt),
-      title: new Date(j.firstSeenAt).toLocaleString() }),
+    el('span', { className: 'when', textContent: fetchedAgo(j.firstSeenAt), title: new Date(j.firstSeenAt).toLocaleString() }),
     url && el('span', { className: 'apply', ariaHidden: 'true', textContent: 'View job ↗' }),
   );
 }
 
-function render() {
-  const q = state.q.trim().toLowerCase();
-  const base = jobs.filter((j) => matchesQuery(j, q));
-  const byCat = (c) => base.filter((j) => c === 'all' || j.category === c);
-
-  renderButtons(document.getElementById('categories'), CATEGORIES, 'category',
-    (c) => byCat(c).filter((j) => matchesWorkplace(j, state.workplace)).length);
-  renderButtons(document.getElementById('workplaces'), WORKPLACES, 'workplace',
-    (w) => byCat(state.category).filter((j) => matchesWorkplace(j, w)).length);
-
-  const shown = byCat(state.category).filter((j) => matchesWorkplace(j, state.workplace));
-  const pages = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
-  state.page = Math.min(state.page, pages);
-  const pageJobs = shown.slice((state.page - 1) * PAGE_SIZE, state.page * PAGE_SIZE);
-  document.getElementById('count').textContent = `${shown.length} job${shown.length === 1 ? '' : 's'}`;
-  document.getElementById('list').replaceChildren(
-    ...(shown.length ? pageJobs.map(jobItem) : [el('li', { className: 'empty', textContent: 'No jobs match these filters.' })]),
-  );
-  document.getElementById('pager').hidden = pages <= 1;
-  document.getElementById('page').textContent = `Page ${state.page} of ${pages}`;
-  document.getElementById('prev').disabled = state.page <= 1;
-  document.getElementById('next').disabled = state.page >= pages;
+/** Starts the list over for the current filters. */
+function resetList() {
+  list.generation++;
+  list.shown = 0;
+  list.total = null;
+  list.loading = false;
+  $('list').replaceChildren();
+  $('count').textContent = 'Loading jobs…';
+  loadMore();
 }
 
-// Filters live in the URL (?category=backend&workplace=remote&q=react&page=2) so filtered views can be shared.
+/** Appends the next PAGE_SIZE jobs; runs again while the end of the list is on screen. */
+async function loadMore() {
+  if (list.loading || (list.total !== null && list.shown >= list.total)) return;
+  list.loading = true;
+  const generation = list.generation;
+  try {
+    const { jobs, total } = await source.page(state, list.shown);
+    if (generation !== list.generation) return;   // filters changed meanwhile
+    if (total != null) list.total = total;
+    if (jobs.length < PAGE_SIZE) list.total = list.shown + jobs.length;
+    list.shown += jobs.length;
+    $('list').append(...jobs.map(jobItem));
+    $('count').textContent = `${list.total} job${list.total === 1 ? '' : 's'}`;
+    if (list.total === 0) $('list').append(el('li', { className: 'empty', textContent: 'No jobs match these filters.' }));
+  } catch {
+    if (generation !== list.generation) return;
+    $('count').textContent = 'Could not load jobs. Please try again later.';
+    list.total = list.shown;
+  } finally {
+    if (generation === list.generation) list.loading = false;
+  }
+  if (generation !== list.generation) return;
+  const more = list.shown < list.total;
+  $('more').hidden = !more;
+  if (more && $('more').getBoundingClientRect().top < innerHeight + 600) loadMore();
+}
+
+// Filters live in the URL (?category=backend&workplace=remote&q=react) so filtered views can be shared.
 function sync() {
   const params = new URLSearchParams();
-  for (const [k, v] of Object.entries(state)) if (v && v !== 'all' && !(k === 'page' && v === 1)) params.set(k, v);
+  for (const [k, v] of Object.entries(state)) if (v && v !== 'all') params.set(k, v);
   history.replaceState(null, '', params.size ? `?${params}` : location.pathname);
-  render();
+  renderTabs();
+  resetList();
 }
 
 function readUrl() {
@@ -210,41 +282,36 @@ function readUrl() {
   if (CATEGORIES.some(([v]) => v === p.get('category'))) state.category = p.get('category');
   if (WORKPLACES.some(([v]) => v === p.get('workplace'))) state.workplace = p.get('workplace');
   state.q = p.get('q') ?? '';
-  state.page = Math.max(1, parseInt(p.get('page'), 10) || 1);
-  document.getElementById('q').value = state.q;
+  $('q').value = state.q;
 }
 
-document.getElementById('q').addEventListener('input', (e) => { state.q = e.target.value; state.page = 1; sync(); });
-for (const [id, step] of [['prev', -1], ['next', 1]]) {
-  document.getElementById(id).addEventListener('click', () => { state.page += step; sync(); scrollTo(0, 0); });
-}
+let typing;
+$('q').addEventListener('input', (e) => {
+  clearTimeout(typing);
+  typing = setTimeout(() => { state.q = e.target.value; sync(); }, 300);
+});
+new IntersectionObserver((entries) => { if (entries[0].isIntersecting) loadMore(); }, { rootMargin: '600px' })
+  .observe($('more'));
 
 // Live from Supabase when web/config.js has a project URL and anon key, otherwise from jobs.json.
-async function loadJobs() {
-  if (!window.SUPABASE_URL || !window.SUPABASE_ANON_KEY) {
-    const r = await fetch('jobs.json', { cache: 'no-cache' });
-    if (!r.ok) throw new Error(r.status);
-    return r.json();
-  }
-  const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm');
-  const supabase = createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY, { auth: { persistSession: false } });
-  const { data, error } = await supabase.from('public_jobs').select('*')
-    .order('firstSeenAt', { ascending: false })
-    .limit(1000);
-  if (error) throw error;
-  return { jobs: data, generatedAt: new Date().toISOString() };
-}
-
-loadJobs()
-  .then((data) => {
-    jobs = data.jobs;
-    if (data.title) { document.title = data.title; document.getElementById('title').textContent = data.title; }
-    document.getElementById('footer').textContent =
-      `Updated ${new Date(data.generatedAt).toLocaleString()}. Listings link to the original job posts; apply there.`;
+(async () => {
+  try {
+    source = await (window.SUPABASE_URL && window.SUPABASE_ANON_KEY ? supabaseSource() : jsonSource());
+    // Before the first scrape after an upgrade these views may not exist yet: the list still works.
+    const [categories, rows] = await Promise.all([
+      source.categories().catch(() => FALLBACK_CATEGORIES), source.counts().catch(() => []),
+    ]);
+    CATEGORIES = [['all', 'All'], ...categories.map((c) => [c.slug, c.label])];
+    LABEL = Object.fromEntries(CATEGORIES);
+    counts = rows;
+    if (source.title) { document.title = source.title; $('title').textContent = source.title; }
+    $('footer').textContent = source.footer;
     readUrl();
-    render();
-  })
-  .catch(() => { document.getElementById('count').textContent = 'Could not load jobs. Please try again later.'; });
+    sync();
+  } catch {
+    $('count').textContent = 'Could not load jobs. Please try again later.';
+  }
+})();
 </script>
 </body>
 </html>
