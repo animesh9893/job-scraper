@@ -402,20 +402,21 @@ export async function openDb() {
         /**
          * Companies whose Glassdoor salaries were never fetched, or are older than `refreshDays` (a failed
          * fetch is retried after a day): premium first, then the ones with the most jobs in the last 30 days.
-         * Only premium companies and companies with a recent job, since only those are on the site.
+         * Only premium companies and companies with a recent job, since only those are on the site, unless
+         * `everyCompany`. A null `limit` means no limit.
          */
-        async companiesForSalaries(limit, refreshDays) {
+        async companiesForSalaries(limit, refreshDays, { everyCompany = false } = {}) {
             return (await pool.query(
                 `SELECT c.slug, c.name
                  FROM companies c
                  LEFT JOIN LATERAL (SELECT COUNT(*) AS n FROM jobs j
                                     WHERE j.company_slug = c.slug AND j.first_seen_at > now() - interval '30 days') recent ON true
-                 WHERE (c.is_premium OR recent.n > 0)
+                 WHERE ($3 OR c.is_premium OR recent.n > 0)
                    AND (c.salaries_fetched_at IS NULL
                         OR c.salaries_fetched_at < now() - make_interval(days => $2)
                         OR (c.salaries_status = 'error' AND c.salaries_fetched_at < now() - interval '1 day'))
                  ORDER BY c.salaries_fetched_at IS NOT NULL, c.is_premium DESC, recent.n DESC, c.sort_order, c.slug
-                 LIMIT $1`, [limit, refreshDays])).rows;
+                 LIMIT $1`, [limit, refreshDays, everyCompany])).rows;
         },
 
         /** USD per unit of each currency; refreshed from Frankfurter (ECB rates) when a day old or missing. */
