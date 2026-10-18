@@ -34,8 +34,9 @@ from the view `public_jobs`, so new jobs show up right after each scrape without
 2. **Fill in `web/config.js`** with the Project URL and the anon (or publishable) key from
    Supabase → Project Settings → API, and push. Both are meant to be public.
    **Never** put the `service_role` / secret key or `DATABASE_URL` there.
-3. **Vercel → Add New → Project → import this repo.** Root Directory: `web`. Framework Preset:
-   Other. Leave the build command empty. Deploy. Each push to `main` redeploys.
+3. **Vercel → Add New → Project → import this repo** and deploy. `vercel.json` tells Vercel to
+   serve `web/` as static files with no install or build, so leave Root Directory at the repo root.
+   Each push to `main` redeploys.
 
 Supabase's Security Advisor may flag `public_jobs` as a "security definer" view. That is on
 purpose: it is how the view shows only these columns while the table stays locked.
