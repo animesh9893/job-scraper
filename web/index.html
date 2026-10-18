@@ -129,14 +129,15 @@ const el = (tag, props = {}, ...children) => {
 // Only link out to http(s) URLs.
 const safeUrl = (u) => { try { const x = new URL(u); return /^https?:$/.test(x.protocol) ? x.href : null; } catch { return null; } };
 
-function timeAgo(dateStr) {
-  if (!dateStr) return '';
-  const days = Math.floor((Date.now() - new Date(dateStr)) / 86400000);
-  if (Number.isNaN(days)) return '';
-  if (days <= 0) return 'Today';
-  if (days === 1) return 'Yesterday';
-  if (days < 30) return `${days} days ago`;
-  return new Date(dateStr).toLocaleDateString();
+// "Fetched 5m ago" / "2h ago" / "3d ago": when the scraper first found the job.
+function fetchedAgo(dateStr) {
+  const mins = Math.floor((Date.now() - new Date(dateStr)) / 60000);
+  if (!dateStr || Number.isNaN(mins)) return '';
+  if (mins < 1) return 'Fetched just now';
+  if (mins < 60) return `Fetched ${mins}m ago`;
+  if (mins < 24 * 60) return `Fetched ${Math.floor(mins / 60)}h ago`;
+  if (mins < 30 * 24 * 60) return `Fetched ${Math.floor(mins / 1440)}d ago`;
+  return `Fetched ${new Date(dateStr).toLocaleDateString()}`;
 }
 
 const matchesWorkplace = (j, w) => w === 'all' || (w === 'onsite' ? !j.workplace : j.workplace === w);
@@ -166,7 +167,8 @@ function jobItem(j) {
       el('div', { className: 'meta', textContent: [j.company, j.location].filter(Boolean).join(' · ') }),
       el('div', { className: 'badges' }, ...badges),
     ),
-    el('span', { className: 'when', textContent: timeAgo(j.postedAt || j.firstSeenAt) }),
+    el('span', { className: 'when', textContent: fetchedAgo(j.firstSeenAt),
+      title: new Date(j.firstSeenAt).toLocaleString() }),
     url && el('span', { className: 'apply', ariaHidden: 'true', textContent: 'View job ↗' }),
   );
 }
@@ -227,7 +229,6 @@ async function loadJobs() {
   const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm');
   const supabase = createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY, { auth: { persistSession: false } });
   const { data, error } = await supabase.from('public_jobs').select('*')
-    .order('postedAt', { ascending: false, nullsFirst: false })
     .order('firstSeenAt', { ascending: false })
     .limit(1000);
   if (error) throw error;

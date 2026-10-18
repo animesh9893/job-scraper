@@ -17,7 +17,7 @@ const { rows: jobs } = await store.query(
      FROM jobs
      WHERE status <> 'skipped'
        AND first_seen_at > now() - make_interval(days => $1)
-     ORDER BY posted_at DESC NULLS LAST, first_seen_at DESC
+     ORDER BY first_seen_at DESC
      LIMIT $2`,
     [site.maxAgeDays, site.maxJobs],
 );
