@@ -81,6 +81,22 @@
     color: var(--accent); text-decoration: none; white-space: nowrap;
   }
   .job:hover .apply { text-decoration: underline; }
+  /* Glassdoor salaries: a range on each card that opens the per-role list. Above the card-wide link too. */
+  .salary {
+    position: relative; z-index: 1; border: 0; padding: 0; background: none; font: inherit; font-size: 13px;
+    color: var(--remote); cursor: pointer; white-space: nowrap;
+  }
+  .salary:hover { text-decoration: underline; }
+  .salaries { position: relative; z-index: 1; margin-top: 8px; font-size: 13px; cursor: auto; }
+  .salaries table { width: 100%; border-collapse: collapse; }
+  .salaries td { padding: 4px 0; border-top: 1px solid var(--border); vertical-align: top; }
+  .salaries td + td { text-align: right; padding-left: 12px; white-space: nowrap; }
+  .salaries .mid { color: var(--muted); font-size: 12px; }
+  .salaries .src { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .company-info { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin: 8px 0; }
+  .company-info h2 { margin: 0 0 2px; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+  .company-info .salaries { margin-top: 10px; }
+  .company-info[hidden] { display: none; }
   .empty { text-align: center; color: var(--muted); padding: 48px 0; }
   /* Off-screen cards skip layout and paint, so a long list stays smooth to scroll. */
   .job { content-visibility: auto; contain-intrinsic-size: auto 96px; }
@@ -109,6 +125,7 @@
     <datalist id="company-names"></datalist>
   </div>
 
+  <section class="company-info" id="company-info" hidden></section>
   <p class="count" id="count" aria-live="polite">Loading jobs…</p>
   <ul class="jobs" id="list"></ul>
   <div class="more" id="more" hidden>Loading more jobs…</div>
@@ -126,7 +143,8 @@ const FALLBACK_CATEGORIES = [['frontend', 'Frontend'], ['backend', 'Backend'], [
 let LABEL = {};
 
 const state = { category: 'all', workplace: 'all', company: '', premium: false, q: '' };
-let COMPANIES = new Map();   // slug → { slug, name, domain, isPremium, jobs, jobsWeek }, from public_companies
+let COMPANIES = new Map();   // slug → { slug, name, domain, isPremium, jobs, jobsWeek, salaryMin, … }, from public_companies
+const SALARIES = new Map();  // slug → promise of its per-role salaries, highest median first
 let source;        // where jobs come from: Supabase or jobs.json, same interface
 let counts = [];   // [{ category, workplace, n }] for the tab counts
 const list = { shown: 0, total: null, loading: false, generation: 0 };
@@ -178,6 +196,8 @@ async function supabaseSource() {
     // Premium companies plus the ones with the most listed jobs, for the chips and the search suggestions.
     companies: async () => (await run(db.from('public_companies').select('*')
       .or('isPremium.eq.true,jobs.gt.0').order('jobs', { ascending: false }).limit(500))).data,
+    salaries: async (slug) => (await run(db.from('public_company_salaries').select('title, currency, min, median, max')
+      .eq('companySlug', slug).order('median', { ascending: false, nullsFirst: false }).order('title'))).data,
     async page(f, offset) {
       let query = db.from('public_jobs').select('*', offset === 0 ? { count: 'exact' } : {})
         .order('firstSeenAt', { ascending: false }).order('id')   // id breaks ties, so pages never overlap
@@ -211,6 +231,7 @@ async function jsonSource() {
     categories: async () => data.categories ?? [...new Set(data.jobs.map((j) => j.category).filter(Boolean))].map((slug) => ({ slug, label: slug })),
     counts: async () => [...tally.values()],
     companies: async () => data.companies ?? [],
+    salaries: async (slug) => (data.salaries ?? []).filter((s) => s.companySlug === slug),
     async page(f, offset) {
       const q = cleanQuery(f.q).toLowerCase();
       const all = data.jobs.filter((j) => matchesCategory(j.category, f.category) && matchesWorkplace(j.workplace, f.workplace) &&
@@ -263,7 +284,71 @@ function renderCompanies() {
   $('company-names').replaceChildren(...[...COMPANIES.values()].map((c) => el('option', { value: c.name })));
 }
 
+/** Yearly pay, short: ₹12L and ₹1.2Cr for rupees, $150K elsewhere. */
+function money(n, currency) {
+  if (n == null) return '';
+  if (currency === 'INR') {
+    const [v, unit] = n >= 1e7 ? [n / 1e7, 'Cr'] : n >= 1e5 ? [n / 1e5, 'L'] : [n / 1e3, 'K'];
+    return `₹${v.toFixed(v < 10 ? 1 : 0).replace(/\.0$/, '')}${unit}`;
+  }
+  try {
+    return new Intl.NumberFormat('en', { style: 'currency', currency, notation: 'compact', maximumFractionDigits: 1 }).format(n);
+  } catch {
+    return `${currency} ${Math.round(n).toLocaleString()}`;
+  }
+}
+const range = (lo, hi, currency) => (lo === hi || hi == null ? money(lo, currency) : `${money(lo, currency)} – ${money(hi, currency)}`);
+const salaryRange = (c) => c?.salaryMin != null && range(c.salaryMin, c.salaryMax, c.salaryCurrency);
+const salariesOf = (slug) => {
+  if (!SALARIES.has(slug)) SALARIES.set(slug, source.salaries(slug).catch(() => { SALARIES.delete(slug); return []; }));
+  return SALARIES.get(slug);
+};
+
+/** The per-role table: typical (median) pay, with the 10th to 90th percentile under it. */
+function salaryTable(rows) {
+  return el('div', { className: 'salaries' },
+    el('table', {}, el('tbody', {}, ...rows.map((r) => el('tr', {},
+      el('td', { textContent: r.title }),
+      el('td', {}, money(r.median, r.currency), el('div', { className: 'mid', textContent: range(r.min, r.max, r.currency) })))))),
+    el('div', { className: 'src', textContent: 'Yearly total pay per Glassdoor: median, and the 10th to 90th percentile below it.' }));
+}
+
+/** Range on a card; a click opens or closes the company's per-role salaries inside the card. */
+function salaryButton(c, card) {
+  const b = el('button', { className: 'salary', type: 'button', ariaExpanded: 'false',
+    title: `Typical yearly pay at ${c.name} across ${c.salaryRoles} role${c.salaryRoles === 1 ? '' : 's'}, per Glassdoor` },
+    `${salaryRange(c)}/yr · Glassdoor ▾`);
+  b.onclick = async () => {
+    const open = card.querySelector('.salaries');
+    if (open) { open.remove(); b.ariaExpanded = 'false'; return; }
+    b.ariaExpanded = 'true';
+    const rows = await salariesOf(c.slug);
+    if (b.ariaExpanded === 'true' && !card.querySelector('.salaries')) card.firstChild.append(salaryTable(rows));
+  };
+  return b;
+}
+
+// Shown above the list while one company is picked: its salary range and every role, open.
+async function renderCompanyInfo() {
+  const c = state.company && COMPANIES.get(state.company);
+  const box = $('company-info');
+  if (!c || c.salaryMin == null) { box.hidden = true; box.replaceChildren(); return; }
+  box.hidden = false;
+  box.replaceChildren(el('h2', {}, logo(c), c.name),
+    el('div', { className: 'meta' }, `${salaryRange(c)} a year across ${c.salaryRoles} role${c.salaryRoles === 1 ? '' : 's'}`,
+      c.glassdoorRating && ` · ${c.glassdoorRating}★ on Glassdoor`));
+  const rows = await salariesOf(c.slug);
+  if (state.company === c.slug) box.append(salaryTable(rows));
+}
+
 function jobItem(j) {
+  const item = jobCard(j);
+  const c = !state.company && COMPANIES.get(j.companySlug);
+  if (salaryRange(c)) item.querySelector('.meta').append(salaryButton(c, item));
+  return item;
+}
+
+function jobCard(j) {
   const url = safeUrl(j.url);
   const badges = [
     j.category && el('span', { className: 'badge cat', textContent: LABEL[j.category] ?? j.category }),
@@ -280,7 +365,8 @@ function jobItem(j) {
               onclick: () => { state.company = j.companySlug; state.q = ''; $('q').value = ''; sync(); scrollTo(0, 0); } },
             logo(COMPANIES.get(j.companySlug)), j.company)
           : j.company),
-        j.company && j.location && ' · ', j.location),
+        j.company && j.location && ' · ', j.location,
+        !state.company && salaryRange(COMPANIES.get(j.companySlug)) && ' · '),
       el('div', { className: 'badges' }, ...badges),
     ),
     el('span', { className: 'when', textContent: fetchedAgo(j.firstSeenAt), title: new Date(j.firstSeenAt).toLocaleString() }),
@@ -333,6 +419,7 @@ function sync() {
   history.replaceState(null, '', params.size ? `?${params}` : location.pathname);
   renderTabs();
   renderCompanies();
+  renderCompanyInfo();
   resetList();
 }
 

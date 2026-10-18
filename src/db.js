@@ -82,6 +82,39 @@ CREATE TABLE IF NOT EXISTS companies (
 CREATE INDEX IF NOT EXISTS companies_name_keys ON companies USING gin (name_keys);
 ALTER TABLE companies ENABLE ROW LEVEL SECURITY;
 
+-- Glassdoor salaries, one row per job title, cached per company for salaries.refreshDays (config).
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS salaries_fetched_at TIMESTAMPTZ;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS salaries_status TEXT;     -- ok | none | not_found | mismatch | error
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS salaries_error TEXT;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS glassdoor_name TEXT;      -- the employer Glassdoor matched the name to
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS glassdoor_rating NUMERIC;
+CREATE TABLE IF NOT EXISTS company_salaries (
+    company_slug   TEXT NOT NULL REFERENCES companies(slug) ON DELETE CASCADE ON UPDATE CASCADE,
+    job_title      TEXT NOT NULL,       -- as Glassdoor names it
+    query          TEXT NOT NULL,       -- the role (salaries.roles) it was found by
+    currency       TEXT NOT NULL,
+    pay_period     TEXT NOT NULL,       -- what Glassdoor reported; the amounts below are per year
+    min_annual     NUMERIC,             -- total pay, 10th percentile
+    median_annual  NUMERIC,
+    max_annual     NUMERIC,             -- 90th percentile
+    usd_per_unit   NUMERIC,             -- exchange rate used for the *_usd columns
+    min_usd        NUMERIC,
+    median_usd     NUMERIC,
+    max_usd        NUMERIC,
+    location       TEXT,
+    fetched_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (company_slug, job_title)
+);
+ALTER TABLE company_salaries ENABLE ROW LEVEL SECURITY;
+-- USD value of one unit of each currency, refreshed at most daily (Frankfurter, ECB rates).
+CREATE TABLE IF NOT EXISTS fx_rates (
+    currency      TEXT PRIMARY KEY,
+    usd_per_unit  NUMERIC NOT NULL,
+    rate_date     DATE,
+    fetched_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE fx_rates ENABLE ROW LEVEL SECURITY;
+
 -- "Google India Pvt. Ltd." → "google". Legal suffixes and "India" are dropped so spellings of one employer match.
 CREATE OR REPLACE FUNCTION company_key(name TEXT) RETURNS TEXT LANGUAGE sql IMMUTABLE AS $$
     SELECT NULLIF(trim(regexp_replace(regexp_replace(regexp_replace(lower(name),
@@ -177,14 +210,30 @@ CREATE OR REPLACE VIEW public_companies AS
     SELECT c.slug, c.name, c.domain, c.is_premium AS "isPremium", c.sort_order AS "sortOrder",
            COUNT(j.id)::int AS jobs,
            (COUNT(j.id) FILTER (WHERE j."firstSeenAt" > now() - interval '7 days'))::int AS "jobsWeek",
-           c.logo_url AS "logoUrl", c.employees
-    FROM companies c LEFT JOIN public_jobs j ON j."companySlug" = c.slug
-    GROUP BY c.slug;
+           c.logo_url AS "logoUrl", c.employees,
+           sal.currency AS "salaryCurrency", sal.lo AS "salaryMin", sal.hi AS "salaryMax", sal.n AS "salaryRoles",
+           c.glassdoor_rating AS "glassdoorRating"
+    FROM companies c
+    LEFT JOIN public_jobs j ON j."companySlug" = c.slug
+    -- Lowest to highest median pay across its roles, in the currency most of its rows use.
+    LEFT JOIN LATERAL (
+        SELECT s.currency, MIN(s.median_annual) AS lo, MAX(s.median_annual) AS hi, COUNT(*)::int AS n
+        FROM company_salaries s WHERE s.company_slug = c.slug
+        GROUP BY s.currency ORDER BY COUNT(*) DESC, s.currency LIMIT 1) sal ON true
+    GROUP BY c.slug, sal.currency, sal.lo, sal.hi, sal.n;
+-- Per-role salaries for the site's dropdown, highest median first.
+CREATE OR REPLACE VIEW public_company_salaries AS
+    SELECT company_slug AS "companySlug", job_title AS title, currency,
+           min_annual AS min, median_annual AS median, max_annual AS max,
+           min_usd AS "minUsd", median_usd AS "medianUsd", max_usd AS "maxUsd", fetched_at AS "fetchedAt"
+    FROM company_salaries;
 DO $$ BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
-        REVOKE ALL ON jobs, categories, searches, companies FROM anon, authenticated;
-        REVOKE ALL ON public_jobs, public_categories, public_job_counts, public_companies FROM anon, authenticated;
-        GRANT SELECT ON public_jobs, public_categories, public_job_counts, public_companies TO anon, authenticated;
+        REVOKE ALL ON jobs, categories, searches, companies, company_salaries, fx_rates FROM anon, authenticated;
+        REVOKE ALL ON public_jobs, public_categories, public_job_counts, public_companies, public_company_salaries
+            FROM anon, authenticated;
+        GRANT SELECT ON public_jobs, public_categories, public_job_counts, public_companies, public_company_salaries
+            TO anon, authenticated;
     END IF;
 END $$;
 
@@ -348,6 +397,100 @@ export async function openDb() {
                 `UPDATE companies SET linkedin_id = COALESCE(linkedin_id, $2), employees = COALESCE($3, employees),
                                       linkedin_checked_at = now() WHERE slug = $1`,
                 [slug, linkedinId, employees]);
+        },
+
+        /**
+         * Companies whose Glassdoor salaries were never fetched, or are older than `refreshDays` (a failed
+         * fetch is retried after a day): premium first, then the ones with the most jobs in the last 30 days.
+         * Only premium companies and companies with a recent job, since only those are on the site.
+         */
+        async companiesForSalaries(limit, refreshDays) {
+            return (await pool.query(
+                `SELECT c.slug, c.name
+                 FROM companies c
+                 LEFT JOIN LATERAL (SELECT COUNT(*) AS n FROM jobs j
+                                    WHERE j.company_slug = c.slug AND j.first_seen_at > now() - interval '30 days') recent ON true
+                 WHERE (c.is_premium OR recent.n > 0)
+                   AND (c.salaries_fetched_at IS NULL
+                        OR c.salaries_fetched_at < now() - make_interval(days => $2)
+                        OR (c.salaries_status = 'error' AND c.salaries_fetched_at < now() - interval '1 day'))
+                 ORDER BY c.salaries_fetched_at IS NOT NULL, c.is_premium DESC, recent.n DESC, c.sort_order, c.slug
+                 LIMIT $1`, [limit, refreshDays])).rows;
+        },
+
+        /** USD per unit of each currency; refreshed from Frankfurter (ECB rates) when a day old or missing. */
+        async fxRates(currencies) {
+            const { rows } = await pool.query(`SELECT currency, usd_per_unit::float AS usd, fetched_at FROM fx_rates`);
+            const rates = new Map(rows.map((r) => [r.currency, r]));
+            const stale = currencies.filter((c) => c !== 'USD' &&
+                (!rates.has(c) || Date.now() - rates.get(c).fetched_at > 24 * 3600e3));
+            if (stale.length) {
+                try {
+                    // [{ date, base: 'USD', quote: 'INR', rate: 94.94 }, …]: units of the quote per US dollar.
+                    const res = await fetch(`https://api.frankfurter.dev/v2/rates?base=USD&quotes=${stale.join(',')}`);
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    for (const { quote: currency, rate: n, date } of await res.json()) {
+                        await pool.query(
+                            `INSERT INTO fx_rates (currency, usd_per_unit, rate_date) VALUES ($1, $2, $3)
+                             ON CONFLICT (currency) DO UPDATE SET usd_per_unit = $2, rate_date = $3, fetched_at = now()`,
+                            [currency, 1 / n, date]);
+                        rates.set(currency, { currency, usd: 1 / n });
+                    }
+                } catch (err) {
+                    console.warn(`  ! couldn't refresh exchange rates (${stale.join(', ')}): ${err.message}`);
+                }
+            }
+            return new Map([['USD', 1], ...[...rates.values()].map((r) => [r.currency, r.usd])]);
+        },
+
+        /**
+         * Replaces a company's salaries with `rows` (already annual, see salaryRows in scrape.js). Rows whose
+         * Glassdoor employer doesn't match the company's name are dropped, since Glassdoor resolves unknown
+         * names to its closest employer. `notFound` records that Glassdoor has no such employer (kept for
+         * refreshDays like a result), `error` a failed fetch (retried after a day).
+         */
+        async saveSalaries(slug, { rows = [], glassdoorName = null, rating = null, notFound = null, error = null }) {
+            const client = await pool.connect();
+            try {
+                await client.query('BEGIN');
+                let status = error ? 'error' : notFound ? 'not_found' : rows.length ? 'ok' : 'none';
+                if (status === 'ok') {
+                    const { rows: [m] } = await client.query(
+                        `SELECT company_key($2) = ANY(name_keys)
+                                OR EXISTS (SELECT 1 FROM unnest(name_keys) k
+                                           WHERE company_key($2) LIKE k || ' %' OR k LIKE company_key($2) || ' %') AS ok
+                         FROM companies WHERE slug = $1`, [slug, glassdoorName]);
+                    if (!m?.ok) status = 'mismatch';
+                }
+                if (status !== 'error') {
+                    // A refresh replaces the old rows; a failed fetch keeps them.
+                    await client.query('DELETE FROM company_salaries WHERE company_slug = $1', [slug]);
+                }
+                if (status === 'ok') {
+                    for (const r of rows) {
+                        await client.query(
+                            `INSERT INTO company_salaries (company_slug, job_title, query, currency, pay_period, min_annual,
+                                 median_annual, max_annual, usd_per_unit, min_usd, median_usd, max_usd, location)
+                             VALUES ($1, $2, $3, $4, $5, $6::numeric, $7::numeric, $8::numeric, $9::numeric,
+                                     $6::numeric * $9::numeric, $7::numeric * $9::numeric, $8::numeric * $9::numeric, $10)
+                             ON CONFLICT DO NOTHING`,
+                            [slug, r.title, r.query, r.currency, r.payPeriod, r.min, r.median, r.max, r.usdPerUnit, r.location]);
+                    }
+                }
+                await client.query(
+                    `UPDATE companies SET salaries_fetched_at = now(), salaries_status = $2, salaries_error = $3,
+                         glassdoor_name = COALESCE($4, glassdoor_name), glassdoor_rating = COALESCE($5, glassdoor_rating)
+                     WHERE slug = $1`,
+                    [slug, status, error ?? notFound ?? (status === 'mismatch' ? `Glassdoor matched "${glassdoorName}"` : null),
+                        status === 'ok' ? glassdoorName : null, status === 'ok' ? rating : null]);
+                await client.query('COMMIT');
+                return status;
+            } catch (err) {
+                await client.query('ROLLBACK');
+                throw err;
+            } finally {
+                client.release();
+            }
         },
 
         /**

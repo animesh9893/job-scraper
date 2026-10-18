@@ -8,12 +8,14 @@
 //   node src/companies.js link                              → link jobs to companies (also runs after every scrape)
 //   node src/companies.js searches                          → rebuild the premium-N LinkedIn searches now
 //   node src/companies.js seed                              → add or update the premium companies from seed-data.js
+//   node src/companies.js salaries [slug]                   → Glassdoor salary status per company, or one company's roles
+//   node src/companies.js refresh-salaries <slug|all>       → fetch salaries again in the next scrape (clears the cache date)
 import { parseArgs } from 'node:util';
 import { loadConfig } from './config.js';
 import { openDb, seedCompanies, upsertCompany } from './db.js';
 
 const USAGE = 'Usage: node src/companies.js [list | add <slug> --name "..." [--linkedin-id N] [--domain d] [--alias a] [--premium] | ' +
-    'premium <slug> | unpremium <slug> | link | searches | seed]';
+    'premium <slug> | unpremium <slug> | link | searches | seed | salaries [slug] | refresh-salaries <slug|all>]';
 
 const { positionals: [command = 'list', ...args], values } = parseArgs({
     allowPositionals: true,
@@ -89,6 +91,24 @@ async function main() {
         console.log('Added or updated the premium companies from seed-data.js.');
         await syncSearches();
         break;
+    case 'salaries': {
+        const { rows } = slug
+            ? await q(`SELECT job_title AS role, currency, min_annual::float AS p10, median_annual::float AS median,
+                              max_annual::float AS p90, round(median_usd)::int AS median_usd, fetched_at::date::text AS fetched
+                       FROM company_salaries WHERE company_slug = $1 ORDER BY median_annual DESC NULLS LAST`, [slug])
+            : await q(`SELECT c.slug, c.salaries_status AS status, c.salaries_fetched_at::date::text AS fetched, c.glassdoor_name,
+                              (SELECT COUNT(*) FROM company_salaries s WHERE s.company_slug = c.slug)::int AS roles, c.salaries_error AS error
+                       FROM companies c WHERE c.salaries_fetched_at IS NOT NULL
+                       ORDER BY c.is_premium DESC, c.salaries_fetched_at DESC LIMIT 60`);
+        console.table(rows);
+        break;
+    }
+    case 'refresh-salaries': {
+        if (!slug) throw new Error('Usage: refresh-salaries <slug|all>');
+        const { rowCount } = await q('UPDATE companies SET salaries_fetched_at = NULL WHERE $1 = \'all\' OR slug = $1', [slug]);
+        console.log(`${rowCount} compan${rowCount === 1 ? 'y' : 'ies'} will get salaries fetched again (salaries.companiesPerRun per scrape).`);
+        break;
+    }
     default:
         throw new Error(USAGE);
     }

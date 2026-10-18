@@ -91,6 +91,28 @@ LinkedIn page (about $0.0015 each), saves the ID and employee count, and adds th
 searches. A premium company that hasn't shown up in any job yet needs `--linkedin-slug` (the part after
 `linkedin.com/company/`) for this.
 
+### Glassdoor salaries
+
+Every company on the site (premium ones and any company with a job in the last 30 days) gets its salaries
+from Glassdoor for the roles under `salaries.roles` in `config.yaml`, in India, with the Actor
+`axlymxp/glassdoor-salary-scraper`. They're cached in `company_salaries` for `salaries.refreshDays` (14) and
+then fetched again. After each scrape, up to `salaries.companiesPerRun` companies are fetched: never-fetched
+ones first, premium first, then the ones with most recent jobs. Each costs $0.02 plus $0.006 per role
+Glassdoor has (about $0.16 for a big company with 25 roles; roles it doesn't have cost nothing). Like the
+searches, it moves to the next Apify token when one runs out of credit.
+
+Salaries are yearly total pay in the company's currency (10th percentile, median, 90th percentile), also
+converted to USD with that day's rate (Frankfurter/ECB, table `fx_rates`). If Glassdoor matches the name to a
+different employer, the salaries are skipped; if it has no such employer, that answer is cached too. On the
+site, each job shows its company's range (lowest to highest median across roles) and opens a list of every
+role, highest first; picking a company shows the list above its jobs.
+
+```bash
+node src/companies.js salaries                 # fetch status per company
+node src/companies.js salaries razorpay        # one company's roles
+node src/companies.js refresh-salaries razorpay   # fetch again in the next scrape (or: all)
+```
+
 ## Public job board on Vercel (live from Supabase)
 
 `web/` is a static page. With a Supabase URL and anon key in `web/config.js`, it reads jobs live
@@ -182,9 +204,13 @@ If one search fails, the others still run; the command then exits with code 1, s
 - `searches`: name, category, workplace, Actor `input`, is_active, priority, last run time and status.
 - `categories`: slug, label, sort_order (the site's tabs).
 - `apify_tokens`: Apify tokens with their monthly limit, used and remaining credit, and reset date.
-- `runs`: one row per search per run, with the label of the Apify token it used.
+- `runs`: one row per search per run (and per salary fetch, as `salaries:<company>`), with the label of the
+  Apify token it used and the cost.
+- `companies`: one row per employer, premium or not, with its LinkedIn ID, logo and salary fetch status.
+- `company_salaries`: Glassdoor pay per company and job title, yearly, in its currency and in USD.
+- `fx_rates`: USD value of each currency, refreshed daily when salaries are fetched.
 - Views for the site (the only things the public key can read): `public_jobs`, `public_categories`,
-  `public_job_counts`.
+  `public_job_counts`, `public_companies`, `public_company_salaries`.
 
 ## Workflows
 
