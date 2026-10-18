@@ -19,6 +19,8 @@ permissions:
 
 jobs:
   scrape:
+    # Secrets are only handed to code that is already on main, never to another branch.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 120          # "all" runs every search, about 40s each
     steps:
@@ -39,7 +41,7 @@ jobs:
   # Turned off until you set the repo variable PUBLISH_SITE=true (see README → Public job board).
   publish:
     needs: scrape
-    if: ${{ !cancelled() && vars.PUBLISH_SITE == 'true' }}   # also publish when only some searches failed
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && vars.PUBLISH_SITE == 'true' }}   # also publish when only some searches failed
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

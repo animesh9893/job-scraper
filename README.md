@@ -164,3 +164,19 @@ If one search fails, the others still run; the command then exits with code 1, s
 - `scrape.yml`: "Run workflow" button and a 3-hourly schedule that scrapes and stores jobs, then
   publishes the job board (when `PUBLISH_SITE=true`).
 - `ci.yml`: on every push, checks syntax and that `config.yaml` loads.
+
+## Keeping the public repo safe
+
+The workflows that use secrets (Scrape jobs, Manage searches) only run on `main`, and only on a
+schedule or from the Run workflow button, which needs write access. CI runs on pull requests with a
+read-only token and no secrets, so a pull request from a fork can't read `DATABASE_URL` or the
+Apify tokens, even if it changes a workflow file.
+
+Repository settings that go with this (owner only, in GitHub's web UI):
+
+- **Settings → Branches → Add branch ruleset** (or classic protection rule) for `main`: require a
+  pull request before merging (0 approvals, so the owner can merge their own), require the status
+  check `check`, block force pushes and deletions, and don't allow bypassing.
+- **Settings → Actions → General → Fork pull request workflows**: "Require approval for all
+  external contributors", so a stranger's PR doesn't run any workflow until the owner approves it.
+- **Settings → Collaborators**: no one else with write access, so only the owner can merge.

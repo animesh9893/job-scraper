@@ -30,6 +30,8 @@ permissions:
 
 jobs:
   searches:
+    # Secrets are only handed to code that is already on main, never to another branch.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
