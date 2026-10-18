@@ -2,5 +2,5 @@
 // leave them empty to load jobs.json instead (built by src/build-site.js for GitHub Pages).
 // Both values are public by design: the anon / publishable key can only read public_jobs.
 // Never put the service_role / secret key here.
-window.SUPABASE_URL = '';
-window.SUPABASE_ANON_KEY = '';
+window.SUPABASE_URL = 'https://yhhcjffgtdcfvkpxppzb.supabase.co';
+window.SUPABASE_ANON_KEY = 'sb_publishable_qDolDAzXkoBaZWJmd-yLKA_ySFQSx9i';
