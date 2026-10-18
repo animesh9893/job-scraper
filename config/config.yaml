@@ -20,6 +20,20 @@ defaults:
 # Apify budget rotates through all of them. `node src/run.js all` runs every active search.
 searchesPerRun: 2
 
+# Premium companies (table `companies`, is_premium) are searched on LinkedIn by company ID in groups of
+# companiesPerSearch, as searches premium-1, premium-2, … that run every intervalHours on top of the rotation.
+# Each asks only for jobs posted in the last intervalHours + 1 hours, since the Actor bills every job it returns.
+# Manage companies with `node src/companies.js` (see README).
+premium:
+  keywords: software engineer
+  location: India
+  intervalHours: 6
+  jobsPerSearch: 25
+  companiesPerSearch: 10
+  # Premium companies without a LinkedIn ID get it looked up from their LinkedIn page (learned from their
+  # jobs), this many per run, about $0.0015 each. A page without an ID is tried again a week later.
+  lookupsPerRun: 3
+
 # Apify tokens (table apify_tokens, then the APIFY_TOKEN secret): switch to the next one when the
 # current account has less than this many dollars of monthly credit left.
 minRemainingUsd: 0.1

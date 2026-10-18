@@ -8,6 +8,7 @@
     "scrape": "node src/run.js",
     "stats": "node src/stats.js",
     "searches": "node src/searches.js",
+    "companies": "node src/companies.js",
     "build-site": "node src/build-site.js",
     "test": "node --test test/*.test.js"
   },

@@ -15,6 +15,25 @@ export async function runSearch(client, actor, search, timeoutSecs) {
     return { items, runId: run.id, costUsd: run.usageTotalUsd ?? null };
 }
 
+/**
+ * Reads a public LinkedIn company page (apify/web-fetch, about $0.0015) for the company's numeric ID, which
+ * LinkedIn puts in the page's links, and its employee count. Either is null when not found.
+ */
+export async function fetchLinkedinCompany(client, linkedinSlug) {
+    const run = await client.actor('apify/web-fetch').call(
+        { url: `https://www.linkedin.com/company/${encodeURIComponent(linkedinSlug)}`, formats: ['links'] }, { waitSecs: 120 });
+    if (run.status !== 'SUCCEEDED') throw new Error(`web-fetch run ${run.id} ended with status ${run.status}`);
+    const { items: [page] } = await client.dataset(run.defaultDatasetId).listItems({ clean: true });
+    // Job links carry f_C=<id>; pages without jobs still have the employee search link, facetCurrentCompany=[<id>]
+    // (URL-encoded twice).
+    const links = (page?.links ?? []).map((l) => { try { return decodeURIComponent(decodeURIComponent(l)); } catch { return l; } });
+    // Some companies list several IDs (their affiliates), e.g. Razorpay's f_C=2770855,13616753,3788927; keep them all.
+    const linkedinId = [/[?&]f_C=(\d+(?:,\d+)*)/, /facetCurrentCompany=\[(\d+(?:,\+?\d+)*)\]/]
+        .map((re) => links.map((l) => re.exec(l)?.[1]).find(Boolean)).find(Boolean)?.replace(/\+/g, '') ?? null;
+    const employees = /"numberOfEmployees":\{[^}]*"value":"?(\d+)/.exec(JSON.stringify(page?.metadata?.jsonLd ?? null))?.[1];
+    return { linkedinId, employees: employees ? Number(employees) : null, costUsd: run.usageTotalUsd ?? null };
+}
+
 export function createClient(token) {
     return new ApifyClient({ token });
 }
@@ -41,7 +60,7 @@ export function normalizeJob(item, { source, search }) {
         company: pick('companyName', 'company'),
         company_url: stripQuery(pick('companyLinkedinUrl', 'companyUrl')),
         location,
-        category: search.category ?? null,
+        category: search.category ?? detectCategory(title),
         workplace: search.workplace ?? detectWorkplace(`${title ?? ''} ${location ?? ''}`),
         url,
         apply_url: pick('applyUrl'),
@@ -53,6 +72,16 @@ export function normalizeJob(item, { source, search }) {
         search_name: search.name,
         raw: item,
     };
+}
+
+/** For searches without a category (premium company searches): a category from the job title, or null. */
+export function detectCategory(title) {
+    const t = (title ?? '').toLowerCase();
+    if (/\b(android|ios|mobile|flutter|react native|swift|kotlin)\b/.test(t)) return 'mobile';
+    if (/full[\s-]?stack/.test(t)) return 'fullstack';
+    if (/\b(front[\s-]?end|ui engineer|ui developer|react|angular|vue)\b/.test(t)) return 'frontend';
+    if (/\b(back[\s-]?end|java|golang|node(\.?js)?|python|django|spring)\b|\.net\b|c#/.test(t)) return 'backend';
+    return null;
 }
 
 /** Title/location only: descriptions mention "remote" too loosely to rely on. */
