@@ -23,6 +23,25 @@ Tables are created automatically on the first run.
 
 To run it on a schedule later, uncomment `schedule:` in `.github/workflows/scrape.yml`.
 
+## Public job board on Vercel (live from Supabase)
+
+`web/` is a static page. With a Supabase URL and anon key in `web/config.js`, it reads jobs live
+from the view `public_jobs`, so new jobs show up right after each scrape without a redeploy.
+
+1. **Run Scrape jobs once.** It creates the view `public_jobs` (jobs first seen in the last 30 days,
+   public listing fields only) and turns on Row Level Security for `jobs` and `runs`. The public
+   anon key can read only the view: no descriptions, raw Actor data, statuses or runs.
+2. **Fill in `web/config.js`** with the Project URL and the anon (or publishable) key from
+   Supabase → Project Settings → API, and push. Both are meant to be public.
+   **Never** put the `service_role` / secret key or `DATABASE_URL` there.
+3. **Vercel → Add New → Project → import this repo.** Root Directory: `web`. Framework Preset:
+   Other. Leave the build command empty. Deploy. Each push to `main` redeploys.
+
+Supabase's Security Advisor may flag `public_jobs` as a "security definer" view. That is on
+purpose: it is how the view shows only these columns while the table stays locked.
+
+With `web/config.js` left empty, the page loads `jobs.json` instead, as on GitHub Pages below.
+
 ## Public job board (GitHub Pages)
 
 After each scrape, the `publish` job builds a static page from the DB (`web/index.html` +

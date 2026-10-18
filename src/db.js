@@ -33,6 +33,24 @@ ALTER TABLE jobs ADD COLUMN IF NOT EXISTS workplace TEXT;
 UPDATE jobs SET category = split_part(search_name, '-', 1)
 WHERE category IS NULL AND split_part(search_name, '-', 1) IN ('frontend', 'backend', 'fullstack', 'mobile');
 
+-- The website reads only this view, with Supabase's public anon key. The base tables have RLS on
+-- and no policies, so that key can't read raw data, descriptions or runs. The view runs as its
+-- owner, which is why it can still read jobs.
+ALTER TABLE jobs ENABLE ROW LEVEL SECURITY;
+CREATE OR REPLACE VIEW public_jobs AS
+    SELECT job_id AS id, title, company, location, category, workplace, url,
+           posted_at AS "postedAt", employment_type AS "employmentType", seniority,
+           first_seen_at AS "firstSeenAt"
+    FROM jobs
+    WHERE status <> 'skipped' AND first_seen_at > now() - interval '30 days';
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+        REVOKE ALL ON jobs FROM anon, authenticated;
+        REVOKE ALL ON public_jobs FROM anon, authenticated;
+        GRANT SELECT ON public_jobs TO anon, authenticated;
+    END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS runs (
     id            BIGSERIAL PRIMARY KEY,
     search_name   TEXT NOT NULL,
@@ -47,6 +65,7 @@ CREATE TABLE IF NOT EXISTS runs (
     started_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
     finished_at   TIMESTAMPTZ
 );
+ALTER TABLE runs ENABLE ROW LEVEL SECURITY;
 `;
 
 const JOB_COLUMNS = ['source', 'job_id', 'title', 'company', 'company_url', 'location', 'category', 'workplace', 'url', 'apply_url',
