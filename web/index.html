@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tech Jobs</title>
+<title>India &amp; Remote Tech Jobs</title>
 <meta name="description" content="Fresh frontend, backend, full stack and mobile developer jobs in India and remote, updated regularly.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💼</text></svg>">
 <style>
@@ -72,6 +72,10 @@
   }
   .job:hover .apply { text-decoration: underline; }
   .empty { text-align: center; color: var(--muted); padding: 48px 0; }
+  .pager { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 16px; }
+  .pager[hidden] { display: none; }
+  .pager span { color: var(--muted); font-size: 14px; }
+  .tab:disabled { opacity: .45; cursor: default; border-color: var(--border); }
   footer { margin-top: 32px; color: var(--muted); font-size: 13px; }
   @media (max-width: 560px) {
     .job { grid-template-columns: 1fr; }
@@ -83,7 +87,7 @@
 <body>
 <div class="wrap">
   <header>
-    <h1 id="title">Tech Jobs</h1>
+    <h1 id="title">India &amp; Remote Tech Jobs</h1>
     <p>Frontend, backend, full stack and mobile developer jobs in India and remote.</p>
   </header>
 
@@ -95,10 +99,16 @@
 
   <p class="count" id="count" aria-live="polite">Loading jobs…</p>
   <ul class="jobs" id="list"></ul>
+  <nav class="pager" id="pager" aria-label="Pages" hidden>
+    <button class="tab" type="button" id="prev">← Newer</button>
+    <span id="page"></span>
+    <button class="tab" type="button" id="next">Older →</button>
+  </nav>
 
   <footer id="footer"></footer>
 </div>
 
+<script src="config.js"></script>
 <script>
 const CATEGORIES = [
   ['all', 'All'], ['frontend', 'Frontend'], ['backend', 'Backend'], ['fullstack', 'Full stack'], ['mobile', 'Mobile'],
@@ -106,7 +116,8 @@ const CATEGORIES = [
 const WORKPLACES = [['all', 'Anywhere'], ['remote', 'Remote'], ['hybrid', 'Hybrid'], ['onsite', 'On-site / not stated']];
 const LABEL = Object.fromEntries(CATEGORIES);
 
-const state = { category: 'all', workplace: 'all', q: '' };
+const PAGE_SIZE = 25;
+const state = { category: 'all', workplace: 'all', q: '', page: 1 };
 let jobs = [];
 
 const el = (tag, props = {}, ...children) => {
@@ -136,7 +147,7 @@ function renderButtons(container, options, key, countFor) {
     const n = countFor(value);
     const b = el('button', { className: 'tab', type: 'button' }, label, el('span', { className: 'n', textContent: n }));
     b.setAttribute('aria-pressed', state[key] === value);
-    b.onclick = () => { state[key] = value; sync(); };
+    b.onclick = () => { state[key] = value; state.page = 1; sync(); };
     return b;
   }));
 }
@@ -171,16 +182,23 @@ function render() {
     (w) => byCat(state.category).filter((j) => matchesWorkplace(j, w)).length);
 
   const shown = byCat(state.category).filter((j) => matchesWorkplace(j, state.workplace));
+  const pages = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
+  state.page = Math.min(state.page, pages);
+  const pageJobs = shown.slice((state.page - 1) * PAGE_SIZE, state.page * PAGE_SIZE);
   document.getElementById('count').textContent = `${shown.length} job${shown.length === 1 ? '' : 's'}`;
   document.getElementById('list').replaceChildren(
-    ...(shown.length ? shown.map(jobItem) : [el('li', { className: 'empty', textContent: 'No jobs match these filters.' })]),
+    ...(shown.length ? pageJobs.map(jobItem) : [el('li', { className: 'empty', textContent: 'No jobs match these filters.' })]),
   );
+  document.getElementById('pager').hidden = pages <= 1;
+  document.getElementById('page').textContent = `Page ${state.page} of ${pages}`;
+  document.getElementById('prev').disabled = state.page <= 1;
+  document.getElementById('next').disabled = state.page >= pages;
 }
 
-// Filters live in the URL (?category=backend&workplace=remote&q=react) so filtered views can be shared.
+// Filters live in the URL (?category=backend&workplace=remote&q=react&page=2) so filtered views can be shared.
 function sync() {
   const params = new URLSearchParams();
-  for (const [k, v] of Object.entries(state)) if (v && v !== 'all') params.set(k, v);
+  for (const [k, v] of Object.entries(state)) if (v && v !== 'all' && !(k === 'page' && v === 1)) params.set(k, v);
   history.replaceState(null, '', params.size ? `?${params}` : location.pathname);
   render();
 }
@@ -190,13 +208,33 @@ function readUrl() {
   if (CATEGORIES.some(([v]) => v === p.get('category'))) state.category = p.get('category');
   if (WORKPLACES.some(([v]) => v === p.get('workplace'))) state.workplace = p.get('workplace');
   state.q = p.get('q') ?? '';
+  state.page = Math.max(1, parseInt(p.get('page'), 10) || 1);
   document.getElementById('q').value = state.q;
 }
 
-document.getElementById('q').addEventListener('input', (e) => { state.q = e.target.value; sync(); });
+document.getElementById('q').addEventListener('input', (e) => { state.q = e.target.value; state.page = 1; sync(); });
+for (const [id, step] of [['prev', -1], ['next', 1]]) {
+  document.getElementById(id).addEventListener('click', () => { state.page += step; sync(); scrollTo(0, 0); });
+}
 
-fetch('jobs.json', { cache: 'no-cache' })
-  .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
+// Live from Supabase when web/config.js has a project URL and anon key, otherwise from jobs.json.
+async function loadJobs() {
+  if (!window.SUPABASE_URL || !window.SUPABASE_ANON_KEY) {
+    const r = await fetch('jobs.json', { cache: 'no-cache' });
+    if (!r.ok) throw new Error(r.status);
+    return r.json();
+  }
+  const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm');
+  const supabase = createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY, { auth: { persistSession: false } });
+  const { data, error } = await supabase.from('public_jobs').select('*')
+    .order('postedAt', { ascending: false, nullsFirst: false })
+    .order('firstSeenAt', { ascending: false })
+    .limit(1000);
+  if (error) throw error;
+  return { jobs: data, generatedAt: new Date().toISOString() };
+}
+
+loadJobs()
   .then((data) => {
     jobs = data.jobs;
     if (data.title) { document.title = data.title; document.getElementById('title').textContent = data.title; }
