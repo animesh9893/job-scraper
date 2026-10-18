@@ -164,3 +164,33 @@ If one search fails, the others still run; the command then exits with code 1, s
 - `scrape.yml`: "Run workflow" button and a 3-hourly schedule that scrapes and stores jobs, then
   publishes the job board (when `PUBLISH_SITE=true`).
 - `ci.yml`: on every push, checks syntax and that `config.yaml` loads.
+
+## Telegram job alerts
+
+A Telegram bot where each person picks keywords and gets only the new jobs that match, after every
+scrape. Nobody gets every job.
+
+- `/add react.js` matches React in the job title ("React.js", "ReactJS" and "React" are the same).
+- `/add frontend engineer` matches the phrase, also written "Front-End Engineer".
+- `/add python --anywhere` also looks in the job description.
+- `/location remote` or `/location bengaluru` limits alerts to those places; `/location clear` undoes it.
+- `/list`, `/remove react.js`, `/stop` and `/start`. `/start` also shows buttons for popular keywords.
+
+A job is sent when any keyword matches (and a location, if set). Jobs first seen in the last
+24 hours are checked and each job reaches a person once, so a new keyword also brings the past day's matches.
+
+How it fits together: the bot's messages go to the Vercel function `api/telegram.js`, which saves
+each person's keywords in the Supabase table `telegram_subscribers` with the secret key. After each
+scrape, the Scrape jobs workflow runs `src/telegram-notify.js`, which matches new jobs and sends them.
+Both tables have RLS with no policies, so the site's public key can't read them.
+
+Setup:
+
+1. In Telegram, message **@BotFather** → `/newbot`, pick a name and username, and copy the token.
+2. Make up a webhook secret: 16 or more random letters, digits, `_` or `-`.
+3. **Vercel → Project → Settings → Environment Variables**: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`,
+   `SUPABASE_URL` (same as in `web/config.js`) and `SUPABASE_SECRET_KEY` (Supabase → Project Settings →
+   API Keys → secret key, or the legacy `service_role` key). Redeploy so the function picks them up.
+4. **GitHub → Settings → Secrets and variables → Actions**: add `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET`.
+5. Run **Scrape jobs** once, so the tables exist, then **Actions → Telegram bot setup → Run workflow**
+   with your site URL. It prints the bot's link; open it and send `/start`.

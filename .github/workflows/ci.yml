@@ -15,6 +15,8 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Syntax check
-        run: for f in src/*.js; do node --check "$f"; done
+        run: for f in src/*.js api/*.js; do node --check "$f"; done
+      - name: Tests
+        run: node --test test/*.test.js
       - name: Config is valid
         run: node -e "import('./src/config.js').then(m => console.log('searchesPerRun:', m.loadConfig().searchesPerRun))"

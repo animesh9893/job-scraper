@@ -34,6 +34,12 @@ jobs:
           SEARCHES: ${{ inputs.searches }}
           APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: Send Telegram alerts
+        if: ${{ !cancelled() }}   # also after a partly failed scrape; skips itself without the secret
+        run: node src/telegram-notify.js
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
   # Rebuilds the public job board (GitHub Pages) from the DB.
   # Turned off until you set the repo variable PUBLISH_SITE=true (see README → Public job board).
