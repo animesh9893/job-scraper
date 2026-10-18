@@ -149,14 +149,14 @@ export async function openDb() {
 
         /**
          * Active searches to run now: the given names, or else the `limit` that ran longest ago
-         * (never-run first). Each comes back as { name, category, workplace, input }.
+         * (never-run first, newest added first among those). Each comes back as { name, category, workplace, input }.
          */
         async pickSearches({ names = [], limit }) {
             const { rows } = names.length
                 ? await pool.query('SELECT * FROM searches WHERE name = ANY($1) ORDER BY name', [names])
                 : await pool.query(
                     `SELECT * FROM searches WHERE is_active
-                     ORDER BY last_run_at ASC NULLS FIRST, priority, name LIMIT $1`, [limit]);
+                     ORDER BY last_run_at ASC NULLS FIRST, priority, created_at DESC, name LIMIT $1`, [limit]);
             return rows;
         },
 

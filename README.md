@@ -119,7 +119,7 @@ Edit `config/config.yaml`:
 
 ## How it works
 
-Picks the `searchesPerRun` active searches with the oldest `last_run_at` (never-run first). For each:
+Picks the `searchesPerRun` active searches with the oldest `last_run_at` (never-run first, newest added first among those). For each:
 1. Runs the Actor and waits for it to finish.
 2. Maps each item to a job row (`normalizeJob` in `src/scrape.js`). HTML entities are decoded and
    tracking parameters are stripped from URLs.

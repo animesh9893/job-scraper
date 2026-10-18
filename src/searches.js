@@ -45,7 +45,7 @@ async function main() {
             SELECT name, category, workplace, input->>'keywords' AS keywords, input->>'location' AS location,
                    is_active AS active, priority, to_char(last_run_at, 'YYYY-MM-DD HH24:MI') AS last_run,
                    last_status, last_error
-            FROM searches ORDER BY is_active DESC, last_run_at ASC NULLS FIRST, priority, name`);
+            FROM searches ORDER BY is_active DESC, last_run_at ASC NULLS FIRST, priority, created_at DESC, name`);
         console.table(rows);
         console.log('Rows at the top run next.');
         break;

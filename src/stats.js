@@ -10,7 +10,7 @@ const show = async (title, sql) => {
 await show('Jobs by status:', 'SELECT status, COUNT(*)::int AS count FROM jobs GROUP BY status');
 await show('Searches (top runs next):', `SELECT name, category, is_active AS active,
                                     to_char(last_run_at, 'YYYY-MM-DD HH24:MI') AS last_run, last_status
-                             FROM searches ORDER BY is_active DESC, last_run_at ASC NULLS FIRST, priority, name`);
+                             FROM searches ORDER BY is_active DESC, last_run_at ASC NULLS FIRST, priority, created_at DESC, name`);
 await show('Last 10 runs:', `SELECT id, search_name, status, items_found AS found, items_new AS new,
                                     cost_usd, to_char(started_at, 'YYYY-MM-DD HH24:MI') AS started, error
                              FROM runs ORDER BY id DESC LIMIT 10`);
