@@ -23,8 +23,25 @@ The run page shows a results table (found / new / filtered / cost per search).
 Browse the data in Supabase → **Table Editor** → `jobs`, `searches`, `categories` and `runs`.
 Tables are created automatically on the first run.
 
-To work through the rotation on its own, uncomment `schedule:` in `.github/workflows/scrape.yml`.
-With 8 searches and 2 per run, every search runs once every 4 runs.
+It also runs on its own every 3 hours (`schedule:` in `.github/workflows/scrape.yml`), each time
+the next `searchesPerRun` searches in the rotation.
+
+## Several Apify accounts
+
+Each Apify account has a monthly credit. Add more accounts' tokens and the scraper spends them in
+order: before each search it checks the current token's remaining credit, and when it is below
+`minRemainingUsd` (`config.yaml`), or a run fails and the account turns out to be out of credit,
+it switches to the next token and runs the search again. The `APIFY_TOKEN` secret is used last.
+
+```bash
+node --env-file=.env src/tokens.js add apify_api_XXXX [label] [priority]   # checks it with Apify, then saves it
+node --env-file=.env src/tokens.js                                         # credit left on every token
+node --env-file=.env src/tokens.js disable <label>                         # or enable / remove
+```
+
+Or insert rows into the `apify_tokens` table in Supabase's Table Editor (label, token, priority).
+Tokens are never passed through workflow inputs, since those show up in the run's logs.
+If every token is out of credit, searches are left at the front of the rotation for the next run.
 
 ## Searches and categories
 
@@ -137,12 +154,13 @@ If one search fails, the others still run; the command then exits with code 1, s
   seniority, salary, description, `raw` (the full Actor item as JSONB), status, first/last seen.
 - `searches`: name, category, workplace, Actor `input`, is_active, priority, last run time and status.
 - `categories`: slug, label, sort_order (the site's tabs).
-- `runs`: one row per search per run.
+- `apify_tokens`: Apify tokens with their monthly limit, used and remaining credit, and reset date.
+- `runs`: one row per search per run, with the label of the Apify token it used.
 - Views for the site (the only things the public key can read): `public_jobs`, `public_categories`,
   `public_job_counts`.
 
 ## Workflows
 
-- `scrape.yml`: manual "Run workflow" button (optional schedule) that scrapes and stores jobs, then
+- `scrape.yml`: "Run workflow" button and a 3-hourly schedule that scrapes and stores jobs, then
   publishes the job board (when `PUBLISH_SITE=true`).
 - `ci.yml`: on every push, checks syntax and that `config.yaml` loads.

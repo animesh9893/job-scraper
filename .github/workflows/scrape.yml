@@ -7,8 +7,8 @@ on:
         description: 'Search names, comma-separated (blank = next in rotation, all = every active search)'
         required: false
         default: ''
-  # schedule:                   # later: uncomment to run daily at 09:00 IST
-  #   - cron: '30 3 * * *'
+  schedule:                     # every 3 hours: the next searchesPerRun searches in the rotation
+    - cron: '0 */3 * * *'
 
 concurrency:
   group: scrape                 # never run two scrapes at once
@@ -20,7 +20,7 @@ permissions:
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 120          # "all" runs every search, about 40s each
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5

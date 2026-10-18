@@ -15,6 +15,7 @@ export function loadConfig() {
         source: 'linkedin',
         timeoutSecs: 900,
         searchesPerRun: 2,
+        minRemainingUsd: 0.1,
         defaults: {},
         ...config,
         filters: { excludeTitleWords: [], excludeCompanies: [], ...config.filters },

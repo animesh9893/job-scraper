@@ -20,6 +20,10 @@ defaults:
 # Apify budget rotates through all of them. `node src/run.js all` runs every active search.
 searchesPerRun: 2
 
+# Apify tokens (table apify_tokens, then the APIFY_TOKEN secret): switch to the next one when the
+# current account has less than this many dollars of monthly credit left.
+minRemainingUsd: 0.1
+
 # Jobs matching these are dropped before they reach the DB (case-insensitive).
 filters:
   excludeTitleWords: [intern, unpaid]

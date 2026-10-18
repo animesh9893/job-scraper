@@ -96,6 +96,31 @@ CREATE TABLE IF NOT EXISTS runs (
     finished_at   TIMESTAMPTZ
 );
 ALTER TABLE runs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE runs ADD COLUMN IF NOT EXISTS apify_token TEXT;   -- label of the Apify token used
+
+-- Apify accounts to spend, lowest priority first. When one has less than config minRemainingUsd
+-- left this month, the scraper moves on to the next (src/tokens.js). The secret APIFY_TOKEN is
+-- used last. RLS with no policies: the site's public key can't read these.
+CREATE TABLE IF NOT EXISTS apify_tokens (
+    id                BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    label             TEXT NOT NULL UNIQUE,          -- e.g. the Apify username
+    token             TEXT NOT NULL UNIQUE,          -- apify_api_...
+    is_active         BOOLEAN NOT NULL DEFAULT true,
+    priority          INTEGER NOT NULL DEFAULT 100,  -- lower = used first
+    monthly_limit_usd NUMERIC(10, 4),                -- filled in by the scraper
+    used_usd          NUMERIC(10, 4),
+    remaining_usd     NUMERIC(10, 4),
+    cycle_end_at      TIMESTAMPTZ,                   -- when Apify resets this account's usage
+    last_checked_at   TIMESTAMPTZ,
+    last_error        TEXT,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE apify_tokens ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+        REVOKE ALL ON runs, apify_tokens FROM anon, authenticated;
+    END IF;
+END $$;
 `;
 
 const JOB_COLUMNS = ['source', 'job_id', 'title', 'company', 'company_url', 'location', 'category', 'workplace', 'url', 'apply_url',
@@ -180,14 +205,14 @@ export async function openDb() {
 
         async finishRun(id, fields) {
             const f = {
-                apify_run_id: null, items_found: 0, items_new: 0, items_skipped: 0,
+                apify_run_id: null, apify_token: null, items_found: 0, items_new: 0, items_skipped: 0,
                 cost_usd: null, error: null, ...fields,
             };
             await pool.query(
                 `UPDATE runs SET status = $2, apify_run_id = $3, items_found = $4, items_new = $5,
-                                 items_skipped = $6, cost_usd = $7, error = $8, finished_at = now()
+                                 items_skipped = $6, cost_usd = $7, error = $8, apify_token = $9, finished_at = now()
                  WHERE id = $1`,
-                [id, f.status, f.apify_run_id, f.items_found, f.items_new, f.items_skipped, f.cost_usd, f.error],
+                [id, f.status, f.apify_run_id, f.items_found, f.items_new, f.items_skipped, f.cost_usd, f.error, f.apify_token],
             );
         },
 
