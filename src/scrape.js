@@ -34,6 +34,46 @@ export async function fetchLinkedinCompany(client, linkedinSlug) {
     return { linkedinId, employees: employees ? Number(employees) : null, costUsd: run.usageTotalUsd ?? null };
 }
 
+/**
+ * Runs the Glassdoor salary Actor (axlymxp/glassdoor-salary-scraper) for one company and these roles. Takes
+ * only the first row per role: Glassdoor's main estimate for that title at that employer (the rows after it
+ * are narrower groups, such as interns or contractors).
+ */
+export async function fetchSalaries(client, actor, { company, roles, location, locationType }, timeoutSecs) {
+    const run = await client.actor(actor).call(
+        { queries: roles, searchBy: 'title', company, location, locationType, maxResultsPerQuery: 1, pageSize: 1 },
+        { waitSecs: timeoutSecs, memory: 512 });   // the start fee is per GB of memory
+    if (run.status !== 'SUCCEEDED') {
+        throw Object.assign(new Error(`Actor run ${run.id} ended with status ${run.status}${run.statusMessage ? `: ${run.statusMessage}` : ''}`),
+            { runId: run.id });
+    }
+    const { items } = await client.dataset(run.defaultDatasetId).listItems({ clean: true });
+    return { items, runId: run.id, costUsd: run.usageTotalUsd ?? null };
+}
+
+const PER_YEAR = { ANNUAL: 1, MONTHLY: 12 };
+
+/**
+ * Glassdoor rows → yearly total pay (10th percentile, median, 90th percentile) per job title, converted with
+ * `usdPerUnit` (currency → USD per unit). Hourly and other rows are skipped: for salaried tech jobs in India
+ * they come from a handful of odd reports.
+ */
+export function salaryRows(items, usdPerUnit) {
+    const seen = new Set();
+    return items.flatMap((i) => {
+        const k = PER_YEAR[i.pay_period];
+        const median = i.total_pay_median ?? i.base_pay_median ?? i.base_pay_mean;
+        if (!k || !i.job_title || !i.currency || median == null || seen.has(i.job_title)) return [];
+        seen.add(i.job_title);
+        const round = (n) => (n == null ? null : Math.round(n * k));
+        return [{
+            title: i.job_title, query: i.query, currency: i.currency, payPeriod: i.pay_period,
+            min: round(i.total_pay_p10 ?? i.base_pay_p10), median: round(median), max: round(i.total_pay_p90 ?? i.base_pay_p90),
+            usdPerUnit: usdPerUnit.get(i.currency) ?? null, location: i.location_name ?? null,
+        }];
+    });
+}
+
 export function createClient(token) {
     return new ApifyClient({ token });
 }

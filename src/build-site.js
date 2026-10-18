@@ -24,8 +24,15 @@ const { rows: jobs } = await store.query(
 );
 const { rows: categories } = await store.query('SELECT slug, label FROM categories ORDER BY sort_order, slug');
 const { rows: companies } = await store.query(
-    `SELECT slug, name, domain, "isPremium", "sortOrder", jobs, "jobsWeek" FROM public_companies
+    `SELECT slug, name, domain, "isPremium", "sortOrder", jobs, "jobsWeek", "logoUrl",
+            "salaryCurrency", "salaryMin"::float AS "salaryMin", "salaryMax"::float AS "salaryMax", "salaryRoles",
+            "glassdoorRating"::float AS "glassdoorRating"
+     FROM public_companies
      WHERE "isPremium" OR jobs > 0 ORDER BY jobs DESC LIMIT 500`);
+const { rows: salaries } = await store.query(
+    `SELECT "companySlug", title, currency, min::float AS min, median::float AS median, max::float AS max
+     FROM public_company_salaries WHERE "companySlug" = ANY($1) ORDER BY median DESC NULLS LAST, title`,
+    [companies.map((c) => c.slug)]);
 await store.close();
 
 rmSync(OUT_DIR, { recursive: true, force: true });
@@ -36,6 +43,7 @@ writeFileSync(`${OUT_DIR}/jobs.json`, JSON.stringify({
     generatedAt: new Date().toISOString(),
     categories,
     companies,
+    salaries,
     jobs,
 }));
 
