@@ -41,7 +41,7 @@ premium:
 # the cached salaries are used. A failed fetch is retried a day later. companiesPerRun: 0 turns it off.
 salaries:
   actor: axlymxp/glassdoor-salary-scraper
-  companiesPerRun: 3
+  companiesPerRun: 2
   refreshDays: 14
   location: India
   locationType: country    # city | state | country
