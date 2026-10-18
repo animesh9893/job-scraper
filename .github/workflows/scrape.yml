@@ -12,7 +12,8 @@ on:
         required: false
         default: ''
   schedule:                     # every 3 hours: the next searchesPerRun searches in the rotation
-    - cron: '0 */3 * * *'
+    # Off the top of the hour: GitHub delays or silently drops many scheduled runs at :00.
+    - cron: '17 */3 * * *'
 
 concurrency:
   group: scrape                 # never run two scrapes at once
