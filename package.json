@@ -3,10 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Fetch jobs via an Apify Actor and store them in a local SQLite DB",
+  "description": "Fetch jobs via an Apify Actor and store them in Supabase",
   "scripts": {
     "scrape": "node src/run.js",
     "stats": "node src/stats.js",
+    "searches": "node src/searches.js",
     "build-site": "node src/build-site.js"
   },
   "engines": {

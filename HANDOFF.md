@@ -14,7 +14,7 @@ Run the flow by hand (a cron job later). It should:
 
 **Current scope:** steps 1, 2 and 4. LinkedIn posting comes later.
 
-**Searches:** frontend, backend, fullstack and mobile × (India, India + remote), 20 jobs each, last 24 hours (`defaults` + `searches` in config.yaml). Jobs get a `category` from their search. `workplace` is `remote` if any remote search finds the job, or detected from title/location (remote/hybrid), otherwise NULL.
+**Searches:** frontend, backend, fullstack and mobile × (India, India + remote), 20 jobs each, last 24 hours (`defaults` in config.yaml; searches and categories in Supabase tables, managed with `src/searches.js`; each run takes the `searchesPerRun` stalest searches). Jobs get a `category` from their search. `workplace` is `remote` if any remote search finds the job, or detected from title/location (remote/hybrid), otherwise NULL.
 
 **Job board:** `src/build-site.js` exports public fields of jobs first seen in the last 30 days to `site/jobs.json` and copies in `web/index.html` (vanilla JS: category tabs, workplace filter, search, filters kept in the URL, dark mode). The `publish` job in scrape.yml deploys it with actions/deploy-pages; it only runs when the repo variable `PUBLISH_SITE` is `true`. **Pages needs a public repo on a free plan** (or GitHub Pro); Settings → Pages → Source must be "GitHub Actions". URL: https://animesh9893.github.io/job-scraper/
 
@@ -44,7 +44,7 @@ job-scraper/
 ├─ .github/workflows/ci.yml      # on push: syntax check + config loads
 ├─ Dockerfile, docker-compose.yml  # optional local runs (no native deps anymore)
 ├─ .env.example          # APIFY_TOKEN, DATABASE_URL
-├─ config/config.yaml    # actor, source, timeoutSecs, searches[], filters
+├─ config/config.yaml    # actor, source, timeoutSecs, defaults, searchesPerRun, filters
 └─ src/
    ├─ run.js     # entry: each search → normalize → filter → save → log run; writes GitHub step summary
    ├─ scrape.js  # runSearch (Actor call + dataset), normalizeJob, cleanText, passesFilters

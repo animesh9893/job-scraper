@@ -14,41 +14,11 @@ defaults:
   limitPerSource: 20
   scrapeCompany: false
 
-# Each search = one Actor run. `input` is passed to the Actor (after merging `defaults`),
-# so any field from the Actor's input schema works here.
-# `category` groups jobs on the site; `workplace: remote` marks every job found by that search as remote.
-searches:
-  - name: frontend-india
-    category: frontend
-    input: { keywords: frontend developer }
-  - name: frontend-remote
-    category: frontend
-    workplace: remote
-    input: { keywords: frontend developer remote }
-
-  - name: backend-india
-    category: backend
-    input: { keywords: backend developer }
-  - name: backend-remote
-    category: backend
-    workplace: remote
-    input: { keywords: backend developer remote }
-
-  - name: fullstack-india
-    category: fullstack
-    input: { keywords: full stack developer }
-  - name: fullstack-remote
-    category: fullstack
-    workplace: remote
-    input: { keywords: full stack developer remote }
-
-  - name: mobile-india
-    category: mobile
-    input: { keywords: mobile app developer android ios }
-  - name: mobile-remote
-    category: mobile
-    workplace: remote
-    input: { keywords: mobile app developer remote }
+# Searches and categories live in Supabase (tables `searches` and `categories`).
+# Manage them with `node src/searches.js` (see README) or in Supabase's Table Editor.
+# Each scrape runs this many searches, the ones that ran longest ago first, so a limited
+# Apify budget rotates through all of them. `node src/run.js all` runs every active search.
+searchesPerRun: 2
 
 # Jobs matching these are dropped before they reach the DB (case-insensitive).
 filters:

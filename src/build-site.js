@@ -17,10 +17,11 @@ const { rows: jobs } = await store.query(
      FROM jobs
      WHERE status <> 'skipped'
        AND first_seen_at > now() - make_interval(days => $1)
-     ORDER BY first_seen_at DESC
+     ORDER BY first_seen_at DESC, job_id
      LIMIT $2`,
     [site.maxAgeDays, site.maxJobs],
 );
+const { rows: categories } = await store.query('SELECT slug, label FROM categories ORDER BY sort_order, slug');
 await store.close();
 
 rmSync(OUT_DIR, { recursive: true, force: true });
@@ -29,6 +30,7 @@ cpSync('web', OUT_DIR, { recursive: true });
 writeFileSync(`${OUT_DIR}/jobs.json`, JSON.stringify({
     title: site.title,
     generatedAt: new Date().toISOString(),
+    categories,
     jobs,
 }));
 

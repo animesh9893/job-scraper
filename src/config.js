@@ -7,18 +7,16 @@ export function loadConfig() {
     const config = parse(readFileSync(CONFIG_PATH, 'utf8'));
 
     if (!config.actor) throw new Error(`${CONFIG_PATH}: "actor" is required`);
-    if (!Array.isArray(config.searches) || config.searches.length === 0) {
-        throw new Error(`${CONFIG_PATH}: add at least one entry under "searches"`);
-    }
-    for (const s of config.searches) {
-        if (!s.name || !s.input) throw new Error(`${CONFIG_PATH}: each search needs "name" and "input"`);
+    if (config.searchesPerRun !== undefined && !(Number.isInteger(config.searchesPerRun) && config.searchesPerRun > 0)) {
+        throw new Error(`${CONFIG_PATH}: "searchesPerRun" must be a whole number above 0`);
     }
 
     return {
         source: 'linkedin',
         timeoutSecs: 900,
+        searchesPerRun: 2,
+        defaults: {},
         ...config,
-        searches: config.searches.map((s) => ({ ...s, input: { ...config.defaults, ...s.input } })),
         filters: { excludeTitleWords: [], excludeCompanies: [], ...config.filters },
         site: { title: 'Tech Jobs', maxAgeDays: 30, maxJobs: 1000, ...config.site },
     };

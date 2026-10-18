@@ -1,5 +1,7 @@
-// Entry point: run every configured search, save new jobs to the DB.
-// Usage: node src/run.js [search-name ...]   (no names = run all searches)
+// Entry point: run the next few searches from the Supabase table `searches`, save new jobs to the DB.
+// Usage: node src/run.js                     → the `searchesPerRun` searches that ran longest ago
+//        node src/run.js [search-name ...]   → just these searches
+//        node src/run.js all                 → every active search
 import { appendFileSync } from 'node:fs';
 import { loadConfig, requireEnv } from './config.js';
 import { openDb } from './db.js';
@@ -16,14 +18,10 @@ function fatal(message) {
     process.exit(1);
 }
 
-let config, searches, client, store;
+let config, client, store;
+const only = process.argv.slice(2).flatMap((a) => a.split(/[\s,]+/)).filter(Boolean);
 try {
     config = loadConfig();
-    const only = process.argv.slice(2).flatMap((a) => a.split(/[\s,]+/)).filter(Boolean);
-    searches = only.length ? config.searches.filter((s) => only.includes(s.name)) : config.searches;
-    if (searches.length === 0) {
-        fatal(`No search matches ${only.join(', ')}. Known: ${config.searches.map((s) => s.name).join(', ')}`);
-    }
     client = createClient(requireEnv('APIFY_TOKEN'));
     requireEnv('DATABASE_URL');
 } catch (err) {
@@ -34,6 +32,20 @@ try {
 } catch (err) {
     fatal(`Could not connect to the database: ${err.message}`);
 }
+
+const all = only.length === 1 && only[0] === 'all';
+const rows = await store.pickSearches(all ? { limit: 10000 } : { names: only, limit: config.searchesPerRun });
+const missing = all ? [] : only.filter((name) => !rows.some((r) => r.name === name));
+if (missing.length || rows.length === 0) {
+    const known = await store.allSearchNames();
+    await store.close();
+    fatal(missing.length
+        ? `No search named ${missing.join(', ')}. Known: ${known.join(', ') || 'none'}`
+        : 'No active searches. Add one with: node src/searches.js add <name> --keywords "..."');
+}
+// A search's own input wins over config `defaults`.
+const searches = rows.map((r) => ({ ...r, input: { ...config.defaults, ...r.input } }));
+console.log(`Running ${searches.length} search(es): ${searches.map((s) => s.name).join(', ')}`);
 const results = [];
 
 for (const search of searches) {
@@ -50,6 +62,7 @@ for (const search of searches) {
         const added = await store.saveJobs(kept);
         const skipped = items.length - kept.length;
 
+        await store.markSearch(search.name, 'SUCCEEDED');
         await store.finishRun(runId, {
             status: 'SUCCEEDED', apify_run_id: apifyRunId, items_found: items.length,
             items_new: added, items_skipped: skipped, cost_usd: costUsd,
@@ -58,6 +71,7 @@ for (const search of searches) {
         console.log(`  ✔ ${items.length} found, ${added} new, ${kept.length - added} already in DB, ${skipped} filtered` +
             (costUsd != null ? `, $${costUsd.toFixed(4)}` : ''));
     } catch (err) {
+        await store.markSearch(search.name, 'FAILED', err.message);
         await store.finishRun(runId, { status: 'FAILED', apify_run_id: err.runId ?? null, error: err.message });
         results.push({ search: search.name, ok: false, error: err.message });
         reportError(`${search.name}: ${err.message}`);

@@ -17,4 +17,4 @@ jobs:
       - name: Syntax check
         run: for f in src/*.js; do node --check "$f"; done
       - name: Config is valid
-        run: node -e "import('./src/config.js').then(m => console.log(m.loadConfig().searches.map(s => s.name)))"
+        run: node -e "import('./src/config.js').then(m => console.log('searchesPerRun:', m.loadConfig().searchesPerRun))"
