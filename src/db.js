@@ -122,7 +122,7 @@ DO $$ BEGIN
     END IF;
 END $$;
 
--- Telegram alerts: who wants which keywords (written by the bot webhook api/telegram.js), and which
+-- Telegram alerts: who wants which keywords (written by the bot webhook web/api/telegram.mjs), and which
 -- jobs each subscriber already got (src/telegram-notify.js). Private: RLS with no policies.
 CREATE TABLE IF NOT EXISTS telegram_subscribers (
     chat_id      BIGINT PRIMARY KEY,

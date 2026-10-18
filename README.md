@@ -179,7 +179,7 @@ scrape. Nobody gets every job.
 A job is sent when any keyword matches (and a location, if set). Jobs first seen in the last
 24 hours are checked and each job reaches a person once, so a new keyword also brings the past day's matches.
 
-How it fits together: the bot's messages go to the Vercel function `api/telegram.js`, which saves
+How it fits together: the bot's messages go to the Vercel function `web/api/telegram.mjs`, which saves
 each person's keywords in the Supabase table `telegram_subscribers` with the secret key. After each
 scrape, the Scrape jobs workflow runs `src/telegram-notify.js`, which matches new jobs and sends them.
 Both tables have RLS with no policies, so the site's public key can't read them.

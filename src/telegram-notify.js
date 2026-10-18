@@ -4,7 +4,6 @@
 // Usage: node src/telegram-notify.js   (needs DATABASE_URL and TELEGRAM_BOT_TOKEN; skips without the token)
 import { openDb } from './db.js';
 import { prepareJob, matches } from './telegram-match.js';
-import { escapeHtml } from './telegram-bot.js';
 
 const MAX_PER_RUN = 30;      // per subscriber, newest first; the rest wait for the next run
 const PER_MESSAGE = 10;
@@ -15,6 +14,7 @@ if (!token) {
     process.exit(0);
 }
 
+const escapeHtml = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function send(chatId, text, retry = true) {

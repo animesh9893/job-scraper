@@ -1,8 +1,8 @@
-// Vercel serverless function: Telegram sends every message to the bot here (the webhook set by
+// Vercel serverless function (Vercel's root directory is web/, so it lives in web/api): Telegram sends every message to the bot here (the webhook set by
 // src/telegram-setup.js). Subscribers are stored in Supabase over its REST API with the secret key,
 // so this needs no npm packages. Vercel env vars: TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET,
 // SUPABASE_URL, SUPABASE_SECRET_KEY (the service_role / secret key, never the public one).
-import { handleUpdate } from '../src/telegram-bot.js';
+import { handleUpdate } from './_telegram-bot.mjs';
 
 const env = (name) => {
     const v = process.env[name];

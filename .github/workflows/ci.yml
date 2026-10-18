@@ -15,7 +15,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Syntax check
-        run: for f in src/*.js api/*.js; do node --check "$f"; done
+        run: for f in src/*.js web/api/*.mjs; do node --check "$f"; done
       - name: Tests
         run: node --test test/*.test.js
       - name: Config is valid

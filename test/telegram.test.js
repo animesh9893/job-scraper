@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { words, prepareJob, matches } from '../src/telegram-match.js';
-import { handleUpdate, parseKeyword } from '../src/telegram-bot.js';
+import { handleUpdate, parseKeyword } from '../web/api/_telegram-bot.mjs';
 
 const job = (title, extra = {}) => prepareJob({ title, company: 'Acme', location: 'Bengaluru, Karnataka, India', ...extra });
 const kw = (text, anywhere = false) => ({ text, anywhere });

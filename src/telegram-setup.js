@@ -1,7 +1,7 @@
 // Points the Telegram bot at the webhook on the Vercel site and sets its command menu. Run once after
 // deploying, and again if the site URL or TELEGRAM_WEBHOOK_SECRET changes.
 // Usage: node src/telegram-setup.js https://your-site.vercel.app   (needs TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET)
-import { COMMANDS } from './telegram-bot.js';
+import { COMMANDS } from '../web/api/_telegram-bot.mjs';
 import { requireEnv } from './config.js';
 
 const site = (process.argv[2] ?? process.env.SITE_URL ?? '').replace(/\/$/, '');

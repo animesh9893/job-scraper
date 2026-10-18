@@ -1,5 +1,5 @@
-// Telegram bot commands: subscribers pick keywords (and optionally locations) and get only the new
-// jobs that match. Runs in the Vercel function api/telegram.js; `store` and `tg` are passed in so this
+// Telegram bot commands (the _ keeps Vercel from serving this file as its own function): subscribers pick keywords (and optionally locations) and get only the new
+// jobs that match. Runs in the Vercel function web/api/telegram.mjs; `store` and `tg` are passed in so this
 // file has no dependencies. Matching and sending happen after each scrape in src/telegram-notify.js.
 
 export const MAX_KEYWORDS = 20;
