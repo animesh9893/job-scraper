@@ -1,0 +1,65 @@
+name: Manage searches
+
+# Runs src/searches.js against Supabase, so searches can be added without a local setup.
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: What to do
+        type: choice
+        options: [list, add, enable, disable, remove, categories, category]
+        default: list
+      name:
+        description: 'Search name (add/enable/disable/remove), or category slug (category)'
+        required: false
+      keywords:
+        description: 'add: search keywords, e.g. frontend remote'
+        required: false
+      category:
+        description: 'add: category slug, e.g. frontend. category: the tab label, e.g. DevOps'
+        required: false
+      workplace:
+        description: 'add: remote or hybrid (blank = not set)'
+        required: false
+      location:
+        description: 'add: location (blank = the default from config.yaml)'
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  searches:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --omit=dev
+      - name: Run searches.js
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          COMMAND: ${{ inputs.command }}
+          NAME: ${{ inputs.name }}
+          KEYWORDS: ${{ inputs.keywords }}
+          CATEGORY: ${{ inputs.category }}
+          WORKPLACE: ${{ inputs.workplace }}
+          LOCATION: ${{ inputs.location }}
+        # Inputs only reach the script as separate arguments, never as shell code.
+        run: |
+          args=("$COMMAND")
+          case "$COMMAND" in
+            add)
+              args+=("$NAME" --keywords "$KEYWORDS")
+              [ -n "$CATEGORY" ] && args+=(--category "$CATEGORY")
+              [ -n "$WORKPLACE" ] && args+=(--workplace "$WORKPLACE")
+              [ -n "$LOCATION" ] && args+=(--location "$LOCATION")
+              ;;
+            enable|disable|remove) args+=("$NAME") ;;
+            category) args+=("$NAME" "$CATEGORY") ;;
+          esac
+          node src/searches.js "${args[@]}"
+          [ "$COMMAND" = list ] || node src/searches.js list

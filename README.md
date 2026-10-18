@@ -28,8 +28,9 @@ With 8 searches and 2 per run, every search runs once every 4 runs.
 
 ## Searches and categories
 
-Add or change them with `src/searches.js` (needs `DATABASE_URL`, locally or via Docker), or edit
-the `searches` and `categories` tables in Supabase's Table Editor.
+Add or change them from GitHub with **Actions → Manage searches → Run workflow** (pick a command,
+fill in name and keywords), with `src/searches.js` locally (`node --env-file=.env src/searches.js …`),
+or in the `searches` and `categories` tables in Supabase's Table Editor.
 
 ```bash
 node src/searches.js                                  # list, the ones at the top run next
