@@ -2,7 +2,11 @@ name: CI
 
 on:
   push:
-  pull_request:
+    branches: [main]
+  pull_request:                 # PRs from forks run with a read-only token and no secrets
+
+permissions:
+  contents: read
 
 jobs:
   check:
