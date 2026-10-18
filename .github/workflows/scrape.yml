@@ -41,6 +41,16 @@ jobs:
           SALARIES: ${{ inputs.salaries }}
           APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: Label jobs with AI
+        if: ${{ !cancelled() }}   # skips itself without an AI key; rate limits leave jobs for the next run
+        continue-on-error: true   # labels are a nice-to-have, never a reason to fail the scrape
+        timeout-minutes: 10
+        run: node src/classify.js
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
       - name: Send Telegram alerts
         if: ${{ !cancelled() }}   # also after a partly failed scrape; skips itself without the secret
         run: node src/telegram-notify.js

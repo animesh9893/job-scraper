@@ -220,6 +220,7 @@ If one search fails, the others still run; the command then exits with code 1, s
 
 - `scrape.yml`: "Run workflow" button and a 3-hourly schedule that scrapes and stores jobs, then
   publishes the job board (when `PUBLISH_SITE=true`).
+- `scrape.yml` also labels new jobs with AI after each scrape (see AI labels), skipping itself without a key.
 - `ci.yml`: on every push, checks syntax and that `config.yaml` loads.
 
 ## Keeping the public repo safe
@@ -237,6 +238,27 @@ Repository settings that go with this (owner only, in GitHub's web UI):
 - **Settings → Actions → General → Fork pull request workflows**: "Require approval for all
   external contributors", so a stranger's PR doesn't run any workflow until the owner approves it.
 - **Settings → Collaborators**: no one else with write access, so only the owner can merge.
+
+## AI labels (free)
+
+After each scrape, `src/classify.js` asks a free LLM to label new jobs with a role (frontend, backend,
+fullstack, mobile, devops, data, ml, qa, security, embedded, manager, product, design, other), up to 6
+skills and the minimum years of experience. They're stored in `jobs.ai_role`, `ai_skills`, `ai_min_years`
+and shown in the `public_jobs` view as `aiRole`, `skills` and `minYears`.
+
+It costs nothing: it only uses free API tiers, and needs no card. (GitHub Models, which worked with the
+built-in `GITHUB_TOKEN`, was retired in July 2026.) Set one or more of these as **GitHub → Settings →
+Secrets and variables → Actions** secrets:
+
+- `GEMINI_API_KEY`: aistudio.google.com → Get API key. Tried first. Google may use free-tier prompts to
+  improve its products, which is fine for public job postings.
+- `GROQ_API_KEY`: console.groq.com → API Keys. Used when Gemini is rate limited.
+- `OPENROUTER_API_KEY` (optional): openrouter.ai → Keys, a last resort with 50 free requests a day.
+
+Without any key the step skips itself. Each run labels at most `classify.jobsPerRun` jobs (default 60,
+newest first, 15 per request) and never fails the scrape: a rate-limited provider is skipped for that run,
+and jobs left unlabeled are tried again next time (up to 3 tries each). Models and limits are in
+`config.yaml` under `classify`.
 
 ## Telegram job alerts
 

@@ -33,6 +33,13 @@ ALTER TABLE jobs ADD COLUMN IF NOT EXISTS category TEXT;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS workplace TEXT;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS company_slug TEXT;   -- companies.slug, set by link_companies()
 CREATE INDEX IF NOT EXISTS jobs_company_slug ON jobs(company_slug);
+-- AI labels (src/classify.js): role from a fixed list, main skills, minimum years asked for.
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS ai_role TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS ai_skills TEXT[];
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS ai_min_years INTEGER;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS ai_model TEXT;                  -- provider:model that labeled it
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS ai_classified_at TIMESTAMPTZ;   -- NULL = not labeled yet
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS ai_attempts INTEGER NOT NULL DEFAULT 0;
 UPDATE jobs SET category = split_part(search_name, '-', 1)
 WHERE category IS NULL AND split_part(search_name, '-', 1) IN ('frontend', 'backend', 'fullstack', 'mobile');
 
@@ -197,7 +204,8 @@ CREATE OR REPLACE VIEW public_jobs AS
     SELECT j.job_id AS id, j.title, j.company, j.location, j.category, j.workplace, j.url,
            j.posted_at AS "postedAt", j.employment_type AS "employmentType", j.seniority,
            j.first_seen_at AS "firstSeenAt", j.company_slug AS "companySlug",
-           COALESCE(c.is_premium, false) AS "companyPremium"
+           COALESCE(c.is_premium, false) AS "companyPremium",
+           j.ai_role AS "aiRole", j.ai_skills AS skills, j.ai_min_years AS "minYears"
     FROM jobs j LEFT JOIN companies c ON c.slug = j.company_slug
     WHERE j.status <> 'skipped' AND j.first_seen_at > now() - interval '30 days';
 CREATE OR REPLACE VIEW public_categories AS

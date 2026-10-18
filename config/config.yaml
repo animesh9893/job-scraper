@@ -81,6 +81,22 @@ filters:
   excludeTitleWords: [intern, unpaid]
   excludeCompanies: []
 
+# AI labels for each new job (src/classify.js): a role (frontend, backend, data, ml, …), up to 6 skills and
+# the minimum years of experience, stored in jobs.ai_*. Runs after each scrape on free API tiers only:
+# providers are tried in order, and only those whose key is set as a GitHub secret are used. A rate-limited
+# provider is skipped for the rest of the run; jobs left unlabeled are retried next run. jobsPerRun: 0 turns it off.
+classify:
+  jobsPerRun: 60        # newest unlabeled first; 4 requests per run at batchSize 15
+  batchSize: 15         # jobs per request (Groq's free tier allows 8K tokens a minute)
+  descriptionChars: 600 # of each description sent to the model
+  providers:
+    - name: gemini      # secret GEMINI_API_KEY, free from aistudio.google.com (no card)
+      model: gemini-flash-lite-latest
+    - name: groq        # secret GROQ_API_KEY, free from console.groq.com (no card)
+      model: openai/gpt-oss-20b
+    - name: openrouter  # secret OPENROUTER_API_KEY, optional last resort (50 free requests a day)
+      model: openai/gpt-oss-20b:free
+
 # Public job board (GitHub Pages)
 site:
   title: India & Remote Tech Jobs
