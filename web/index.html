@@ -37,6 +37,10 @@
   .tab:hover { border-color: var(--accent); }
   .tab[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
   .tab .n { opacity: .7; font-size: 12px; margin-left: 4px; }
+  .companies { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+  .companies .tab { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; flex: none; }
+  .companies .tab.quiet:not([aria-pressed="true"]) { color: var(--muted); }
+  .logo { width: 16px; height: 16px; border-radius: 4px; flex: none; background: var(--chip); }
   input[type="search"] {
     width: 100%; padding: 10px 14px; font: inherit; color: var(--text);
     background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
@@ -59,7 +63,13 @@
   /* The title link covers the whole card, so a click anywhere opens the job. */
   .job h2 a::after { content: ""; position: absolute; inset: 0; border-radius: 12px; }
   .job:hover h2 a { color: var(--accent); }
-  .meta { color: var(--muted); font-size: 14px; }
+  .meta { color: var(--muted); font-size: 14px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  /* Above the card-wide title link, so it filters by company instead of opening the job. */
+  .company {
+    position: relative; z-index: 1; border: 0; padding: 0; background: none; font: inherit; color: inherit;
+    cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .company:hover { color: var(--accent); text-decoration: underline; }
   .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
   .badge { font-size: 12px; padding: 2px 8px; border-radius: 6px; background: var(--chip); color: var(--muted); }
   .badge.cat { background: var(--accent-soft); color: var(--accent); }
@@ -94,7 +104,9 @@
   <div class="controls">
     <div class="row" id="categories" role="group" aria-label="Category"></div>
     <div class="row" id="workplaces" role="group" aria-label="Workplace"></div>
-    <input type="search" id="q" placeholder="Search title, company or location…" aria-label="Search jobs">
+    <div class="row companies" id="companies" role="group" aria-label="Companies" hidden></div>
+    <input type="search" id="q" list="company-names" placeholder="Search title, company or location…" aria-label="Search jobs">
+    <datalist id="company-names"></datalist>
   </div>
 
   <p class="count" id="count" aria-live="polite">Loading jobs…</p>
@@ -113,7 +125,8 @@ const FALLBACK_CATEGORIES = [['frontend', 'Frontend'], ['backend', 'Backend'], [
   .map(([slug, label]) => ({ slug, label }));
 let LABEL = {};
 
-const state = { category: 'all', workplace: 'all', q: '' };
+const state = { category: 'all', workplace: 'all', company: '', premium: false, q: '' };
+let COMPANIES = new Map();   // slug → { slug, name, domain, isPremium, jobs, jobsWeek }, from public_companies
 let source;        // where jobs come from: Supabase or jobs.json, same interface
 let counts = [];   // [{ category, workplace, n }] for the tab counts
 const list = { shown: 0, total: null, loading: false, generation: 0 };
@@ -124,6 +137,13 @@ const el = (tag, props = {}, ...children) => {
   node.append(...children.filter(Boolean));
   return node;
 };
+
+const logoUrl = (domain) => `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`;
+const logo = (c) => c?.domain && el('img', {
+  className: 'logo', src: logoUrl(c.domain), alt: '', loading: 'lazy', referrerPolicy: 'no-referrer', onerror() { this.remove(); },
+});
+// The category and workplace counts are for all jobs, so they're hidden while other filters narrow the list.
+const countsShown = () => !state.q.trim() && !state.company && !state.premium;
 
 // Only link out to http(s) URLs.
 const safeUrl = (u) => { try { const x = new URL(u); return /^https?:$/.test(x.protocol) ? x.href : null; } catch { return null; } };
@@ -153,6 +173,9 @@ async function supabaseSource() {
     footer: 'Live listings, updated after every scrape. They link to the original job posts; apply there.',
     categories: async () => (await run(db.from('public_categories').select('slug, label').order('sort_order').order('slug'))).data,
     counts: async () => (await run(db.from('public_job_counts').select('*'))).data,
+    // Premium companies plus the ones with the most listed jobs, for the chips and the search suggestions.
+    companies: async () => (await run(db.from('public_companies').select('*')
+      .or('isPremium.eq.true,jobs.gt.0').order('jobs', { ascending: false }).limit(500))).data,
     async page(f, offset) {
       let query = db.from('public_jobs').select('*', offset === 0 ? { count: 'exact' } : {})
         .order('firstSeenAt', { ascending: false }).order('id')   // id breaks ties, so pages never overlap
@@ -160,6 +183,8 @@ async function supabaseSource() {
       if (f.category !== 'all') query = query.eq('category', f.category);
       if (f.workplace === 'onsite') query = query.is('workplace', null);
       else if (f.workplace !== 'all') query = query.eq('workplace', f.workplace);
+      if (f.company) query = query.eq('companySlug', f.company);
+      if (f.premium) query = query.eq('companyPremium', true);
       const q = cleanQuery(f.q);
       if (q) query = query.or(['title', 'company', 'location'].map((c) => `${c}.ilike.*${q}*`).join(','));
       const { data, count } = await run(query);
@@ -183,9 +208,11 @@ async function jsonSource() {
     footer: `Updated ${new Date(data.generatedAt).toLocaleString()}. Listings link to the original job posts; apply there.`,
     categories: async () => data.categories ?? [...new Set(data.jobs.map((j) => j.category).filter(Boolean))].map((slug) => ({ slug, label: slug })),
     counts: async () => [...tally.values()],
+    companies: async () => data.companies ?? [],
     async page(f, offset) {
       const q = cleanQuery(f.q).toLowerCase();
       const all = data.jobs.filter((j) => matchesCategory(j.category, f.category) && matchesWorkplace(j.workplace, f.workplace) &&
+        (!f.company || j.companySlug === f.company) && (!f.premium || j.companyPremium) &&
         (!q || [j.title, j.company, j.location].some((v) => v && v.toLowerCase().includes(q))));
       return { jobs: all.slice(offset, offset + PAGE_SIZE), total: all.length };
     },
@@ -196,7 +223,7 @@ async function jsonSource() {
 function renderButtons(container, options, key, countFor) {
   container.replaceChildren(...options.map(([value, label]) => {
     const b = el('button', { className: 'tab', type: 'button' }, label,
-      !state.q.trim() && el('span', { className: 'n', textContent: countFor(value) }));
+      countsShown() && el('span', { className: 'n', textContent: countFor(value) }));
     b.setAttribute('aria-pressed', state[key] === value);
     b.onclick = () => { state[key] = value; sync(); };
     return b;
@@ -211,6 +238,29 @@ function renderTabs() {
     (w) => sum((r) => matchesCategory(r.category, state.category) && matchesWorkplace(r.workplace, w)));
 }
 
+// Premium companies first, the ones with the most new jobs this week leading; a company picked from search
+// that isn't premium is shown in front so it can be cleared.
+function renderCompanies() {
+  const premium = [...COMPANIES.values()].filter((c) => c.isPremium)
+    .sort((a, b) => b.jobsWeek - a.jobsWeek || a.sortOrder - b.sortOrder);
+  const picked = state.company && COMPANIES.get(state.company);
+  const shown = picked && !picked.isPremium ? [picked, ...premium] : premium;
+  const chip = (label, pressed, onclick, extra = {}) => {
+    const b = el('button', { className: 'tab', type: 'button', onclick, ...extra }, ...label);
+    b.setAttribute('aria-pressed', pressed);
+    return b;
+  };
+  $('companies').hidden = !shown.length;
+  $('companies').replaceChildren(...[
+    premium.length > 0 && chip(['Premium companies'], state.premium, () => { state.premium = !state.premium; sync(); },
+      { title: 'Only jobs at premium companies' }),
+    ...shown.map((c) => chip([logo(c), c.name, el('span', { className: 'n', textContent: c.jobs })],
+      state.company === c.slug, () => { state.company = state.company === c.slug ? '' : c.slug; sync(); },
+      { className: `tab${c.jobs ? '' : ' quiet'}`, title: `${c.jobsWeek} new this week` })),
+  ].filter(Boolean));
+  $('company-names').replaceChildren(...[...COMPANIES.values()].map((c) => el('option', { value: c.name })));
+}
+
 function jobItem(j) {
   const url = safeUrl(j.url);
   const badges = [
@@ -222,7 +272,13 @@ function jobItem(j) {
   return el('li', { className: 'job' },
     el('div', {},
       el('h2', {}, url ? el('a', { href: url, target: '_blank', rel: 'noopener nofollow', textContent: j.title }) : j.title),
-      el('div', { className: 'meta', textContent: [j.company, j.location].filter(Boolean).join(' · ') }),
+      el('div', { className: 'meta' },
+        j.company && (j.companySlug
+          ? el('button', { className: 'company', type: 'button', title: `Only jobs at ${j.company}`,
+              onclick: () => { state.company = j.companySlug; state.q = ''; $('q').value = ''; sync(); scrollTo(0, 0); } },
+            logo(COMPANIES.get(j.companySlug)), j.company)
+          : j.company),
+        j.company && j.location && ' · ', j.location),
       el('div', { className: 'badges' }, ...badges),
     ),
     el('span', { className: 'when', textContent: fetchedAgo(j.firstSeenAt), title: new Date(j.firstSeenAt).toLocaleString() }),
@@ -268,12 +324,13 @@ async function loadMore() {
   if (more && $('more').getBoundingClientRect().top < innerHeight + 600) loadMore();
 }
 
-// Filters live in the URL (?category=backend&workplace=remote&q=react) so filtered views can be shared.
+// Filters live in the URL (?category=backend&workplace=remote&company=google&q=react) so filtered views can be shared.
 function sync() {
   const params = new URLSearchParams();
   for (const [k, v] of Object.entries(state)) if (v && v !== 'all') params.set(k, v);
   history.replaceState(null, '', params.size ? `?${params}` : location.pathname);
   renderTabs();
+  renderCompanies();
   resetList();
 }
 
@@ -281,6 +338,8 @@ function readUrl() {
   const p = new URLSearchParams(location.search);
   if (CATEGORIES.some(([v]) => v === p.get('category'))) state.category = p.get('category');
   if (WORKPLACES.some(([v]) => v === p.get('workplace'))) state.workplace = p.get('workplace');
+  state.company = p.get('company') ?? '';
+  state.premium = p.get('premium') === 'true';
   state.q = p.get('q') ?? '';
   $('q').value = state.q;
 }
@@ -288,6 +347,13 @@ function readUrl() {
 let typing;
 $('q').addEventListener('input', (e) => {
   clearTimeout(typing);
+  // Picking a company from the suggestions filters by that company instead of searching for its name.
+  const name = e.target.value.trim().toLowerCase();
+  const company = name && [...COMPANIES.values()].find((c) => c.name.toLowerCase() === name);
+  if (company && e.inputType !== 'insertText') {
+    state.company = company.slug; state.q = ''; e.target.value = ''; sync();
+    return;
+  }
   typing = setTimeout(() => { state.q = e.target.value; sync(); }, 300);
 });
 new IntersectionObserver((entries) => { if (entries[0].isIntersecting) loadMore(); }, { rootMargin: '600px' })
@@ -298,9 +364,10 @@ new IntersectionObserver((entries) => { if (entries[0].isIntersecting) loadMore(
   try {
     source = await (window.SUPABASE_URL && window.SUPABASE_ANON_KEY ? supabaseSource() : jsonSource());
     // Before the first scrape after an upgrade these views may not exist yet: the list still works.
-    const [categories, rows] = await Promise.all([
-      source.categories().catch(() => FALLBACK_CATEGORIES), source.counts().catch(() => []),
+    const [categories, rows, companies] = await Promise.all([
+      source.categories().catch(() => FALLBACK_CATEGORIES), source.counts().catch(() => []), source.companies().catch(() => []),
     ]);
+    COMPANIES = new Map(companies.map((c) => [c.slug, c]));
     CATEGORIES = [['all', 'All'], ...categories.map((c) => [c.slug, c.label])];
     LABEL = Object.fromEntries(CATEGORIES);
     counts = rows;

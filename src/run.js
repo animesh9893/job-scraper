@@ -1,5 +1,6 @@
 // Entry point: run the next few searches from the Supabase table `searches`, save new jobs to the DB.
-// Usage: node src/run.js                     → the `searchesPerRun` searches that ran longest ago
+// Usage: node src/run.js                     → premium searches that are due, plus the `searchesPerRun`
+//                                              rotating searches that ran longest ago
 //        node src/run.js [search-name ...]   → just these searches
 //        node src/run.js all                 → every active search
 import { appendFileSync } from 'node:fs';
@@ -34,7 +35,8 @@ try {
 }
 
 const all = only.length === 1 && only[0] === 'all';
-const rows = await store.pickSearches(all ? { limit: 10000 } : { names: only, limit: config.searchesPerRun });
+await store.syncPremiumSearches(config.premium);
+const rows = await store.pickSearches({ names: all ? [] : only, all, limit: config.searchesPerRun });
 const missing = all ? [] : only.filter((name) => !rows.some((r) => r.name === name));
 if (missing.length || rows.length === 0) {
     const known = await store.allSearchNames();
@@ -118,6 +120,8 @@ for (const search of searches) {
 
 // Save the latest remaining credit of the token we ended on.
 if (token) await checkToken(store, token);
+const linked = await store.linkCompanies();
+console.log(`Linked ${linked} job(s) to companies`);
 await store.close();
 
 const ok = results.filter((r) => r.ok);

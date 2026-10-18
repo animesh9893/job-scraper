@@ -19,6 +19,7 @@ export function loadConfig() {
         defaults: {},
         ...config,
         filters: { excludeTitleWords: [], excludeCompanies: [], ...config.filters },
+        premium: { keywords: 'software engineer', location: 'India', intervalHours: 6, jobsPerSearch: 25, companiesPerSearch: 10, ...config.premium },
         site: { title: 'Tech Jobs', maxAgeDays: 30, maxJobs: 1000, ...config.site },
     };
 }

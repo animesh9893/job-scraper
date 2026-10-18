@@ -64,6 +64,29 @@ field works: `--input '{"datePosted":"pastWeek","limitPerSource":50}'`. `--prior
 decides the order among searches that ran equally long ago, lower first. A new search runs in the
 next scrape. With Docker: `docker compose run --rm scraper src/searches.js list`.
 
+## Companies and premium companies
+
+Every job is linked to a row in the `companies` table after each scrape: by its LinkedIn company page
+first, then by name with suffixes like "Pvt. Ltd." and "India" dropped, so "Google India Pvt. Ltd." and
+"Google" are one company. Companies seen for the first time are added automatically.
+
+Premium companies (Google, Microsoft, Amazon, Coinbase and more, listed in `src/seed-data.js`) show as
+chips on the site, and the ones with a LinkedIn company ID are searched directly: in groups of 10, as
+searches `premium-1`, `premium-2`, … that run every 6 hours on top of the rotation and ask only for jobs
+posted in the last 7 hours, since the Actor bills every job it returns. Change this under `premium` in
+`config.yaml`.
+
+```bash
+node src/companies.js                                  # premium companies, then the ones with most jobs
+node src/companies.js add flipkart --linkedin-id 123456 --alias "Flipkart Internet"   # set the ID or an alias
+node src/companies.js add groww --name Groww --domain groww.in --premium              # a new premium company
+node src/companies.js unpremium oracle                 # stop searching it and drop its chip
+```
+
+A company's LinkedIn ID is the number after `f_C=` in the URL of a LinkedIn job search filtered by
+that company. Flipkart, Zomato, Razorpay, PhonePe, CRED and Zerodha don't have one yet, so they're
+matched by name from the other searches until it's added.
+
 ## Public job board on Vercel (live from Supabase)
 
 `web/` is a static page. With a Supabase URL and anon key in `web/config.js`, it reads jobs live

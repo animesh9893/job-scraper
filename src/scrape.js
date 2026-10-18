@@ -41,7 +41,7 @@ export function normalizeJob(item, { source, search }) {
         company: pick('companyName', 'company'),
         company_url: stripQuery(pick('companyLinkedinUrl', 'companyUrl')),
         location,
-        category: search.category ?? null,
+        category: search.category ?? detectCategory(title),
         workplace: search.workplace ?? detectWorkplace(`${title ?? ''} ${location ?? ''}`),
         url,
         apply_url: pick('applyUrl'),
@@ -53,6 +53,16 @@ export function normalizeJob(item, { source, search }) {
         search_name: search.name,
         raw: item,
     };
+}
+
+/** For searches without a category (premium company searches): a category from the job title, or null. */
+export function detectCategory(title) {
+    const t = (title ?? '').toLowerCase();
+    if (/\b(android|ios|mobile|flutter|react native|swift|kotlin)\b/.test(t)) return 'mobile';
+    if (/full[\s-]?stack/.test(t)) return 'fullstack';
+    if (/\b(front[\s-]?end|ui engineer|ui developer|react|angular|vue)\b/.test(t)) return 'frontend';
+    if (/\b(back[\s-]?end|java|golang|node(\.?js)?|python|django|spring)\b|\.net\b|c#/.test(t)) return 'backend';
+    return null;
 }
 
 /** Title/location only: descriptions mention "remote" too loosely to rely on. */
