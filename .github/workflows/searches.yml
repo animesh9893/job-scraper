@@ -7,10 +7,10 @@ on:
       command:
         description: What to do
         type: choice
-        options: [list, add, enable, disable, remove, categories, category]
+        options: [list, add, enable, disable, remove, categories, category, import]
         default: list
       name:
-        description: 'Search name (add/enable/disable/remove), or category slug (category)'
+        description: 'Search name (add/enable/disable/remove), category slug (category), or JSON file in the repo (import)'
         required: false
       keywords:
         description: 'add: search keywords, e.g. frontend remote'
@@ -58,7 +58,7 @@ jobs:
               [ -n "$WORKPLACE" ] && args+=(--workplace "$WORKPLACE")
               [ -n "$LOCATION" ] && args+=(--location "$LOCATION")
               ;;
-            enable|disable|remove) args+=("$NAME") ;;
+            enable|disable|remove|import) args+=("$NAME") ;;
             category) args+=("$NAME" "$CATEGORY") ;;
           esac
           node src/searches.js "${args[@]}"

@@ -1,0 +1,206 @@
+[
+  {
+    "name": "frontend-bengaluru",
+    "category": "frontend",
+    "input": {
+      "keywords": "frontend developer",
+      "location": "Bengaluru, Karnataka, India"
+    }
+  },
+  {
+    "name": "backend-bengaluru",
+    "category": "backend",
+    "input": {
+      "keywords": "backend developer",
+      "location": "Bengaluru, Karnataka, India"
+    }
+  },
+  {
+    "name": "fullstack-bengaluru",
+    "category": "fullstack",
+    "input": {
+      "keywords": "full stack developer",
+      "location": "Bengaluru, Karnataka, India"
+    }
+  },
+  {
+    "name": "mobile-bengaluru",
+    "category": "mobile",
+    "input": {
+      "keywords": "mobile app developer android ios",
+      "location": "Bengaluru, Karnataka, India"
+    }
+  },
+  {
+    "name": "ai-bengaluru",
+    "category": "ai",
+    "input": {
+      "keywords": "AI engineer LLM",
+      "location": "Bengaluru, Karnataka, India"
+    }
+  },
+  {
+    "name": "ai-india",
+    "category": "ai",
+    "input": {
+      "keywords": "AI engineer LLM"
+    }
+  },
+  {
+    "name": "ai-remote",
+    "category": "ai",
+    "workplace": "remote",
+    "input": {
+      "keywords": "AI engineer LLM remote"
+    }
+  },
+  {
+    "name": "frontend-worldwide-remote",
+    "category": "frontend",
+    "workplace": "remote",
+    "input": {
+      "keywords": "frontend developer remote",
+      "location": "Worldwide"
+    }
+  },
+  {
+    "name": "backend-worldwide-remote",
+    "category": "backend",
+    "workplace": "remote",
+    "input": {
+      "keywords": "backend developer remote",
+      "location": "Worldwide"
+    }
+  },
+  {
+    "name": "fullstack-worldwide-remote",
+    "category": "fullstack",
+    "workplace": "remote",
+    "input": {
+      "keywords": "full stack developer remote",
+      "location": "Worldwide"
+    }
+  },
+  {
+    "name": "mobile-worldwide-remote",
+    "category": "mobile",
+    "workplace": "remote",
+    "input": {
+      "keywords": "mobile app developer android ios remote",
+      "location": "Worldwide"
+    }
+  },
+  {
+    "name": "ai-worldwide-remote",
+    "category": "ai",
+    "workplace": "remote",
+    "input": {
+      "keywords": "AI engineer LLM remote",
+      "location": "Worldwide"
+    }
+  },
+  {
+    "name": "senior-frontend-remote",
+    "category": "frontend",
+    "workplace": "remote",
+    "input": {
+      "keywords": "senior frontend engineer react typescript remote"
+    }
+  },
+  {
+    "name": "react-typescript-remote",
+    "category": "frontend",
+    "workplace": "remote",
+    "input": {
+      "keywords": "react typescript developer remote"
+    }
+  },
+  {
+    "name": "frontend-platform-remote",
+    "category": "frontend",
+    "workplace": "remote",
+    "input": {
+      "keywords": "frontend platform engineer remote"
+    }
+  },
+  {
+    "name": "yc-startup-frontend-remote",
+    "category": "frontend",
+    "workplace": "remote",
+    "input": {
+      "keywords": "Y Combinator startup frontend engineer remote"
+    }
+  },
+  {
+    "name": "fullstack-react-go-remote",
+    "category": "fullstack",
+    "workplace": "remote",
+    "input": {
+      "keywords": "full stack engineer react golang remote"
+    }
+  },
+  {
+    "name": "fullstack-react-python-remote",
+    "category": "fullstack",
+    "workplace": "remote",
+    "input": {
+      "keywords": "full stack engineer react python remote"
+    }
+  },
+  {
+    "name": "yc-startup-fullstack-remote",
+    "category": "fullstack",
+    "workplace": "remote",
+    "input": {
+      "keywords": "Y Combinator startup full stack engineer remote"
+    }
+  },
+  {
+    "name": "founding-engineer-remote",
+    "category": "fullstack",
+    "workplace": "remote",
+    "input": {
+      "keywords": "founding engineer startup remote"
+    }
+  },
+  {
+    "name": "early-stage-startup-remote",
+    "category": "fullstack",
+    "workplace": "remote",
+    "input": {
+      "keywords": "early stage startup software engineer remote"
+    }
+  },
+  {
+    "name": "golang-backend-remote",
+    "category": "backend",
+    "workplace": "remote",
+    "input": {
+      "keywords": "golang backend engineer remote"
+    }
+  },
+  {
+    "name": "react-native-remote",
+    "category": "mobile",
+    "workplace": "remote",
+    "input": {
+      "keywords": "react native developer remote"
+    }
+  },
+  {
+    "name": "ai-engineer-remote",
+    "category": "ai",
+    "workplace": "remote",
+    "input": {
+      "keywords": "AI engineer LLM agents remote"
+    }
+  },
+  {
+    "name": "ai-agents-mcp-remote",
+    "category": "ai",
+    "workplace": "remote",
+    "input": {
+      "keywords": "software engineer AI agents MCP remote"
+    }
+  }
+]

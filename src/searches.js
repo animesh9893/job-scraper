@@ -7,11 +7,14 @@
 //   node src/searches.js categories                        → list categories
 //   node src/searches.js category <slug> <label> [sort]    → add or rename a category
 //   node src/searches.js seed                              → add the starting searches and categories again
+//   node src/searches.js import <file.json>                → add or update many searches at once
+//                            (a list of { name, category, workplace, input, priority })
+import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { openDb, seed } from './db.js';
 
 const USAGE = 'Usage: node src/searches.js [list | add <name> --keywords "..." | enable <name> | disable <name> | ' +
-    'remove <name> | categories | category <slug> <label> [sort] | seed]';
+    'remove <name> | categories | category <slug> <label> [sort] | seed | import <file.json>]';
 
 const { positionals: [command = 'list', ...args], values } = parseArgs({
     allowPositionals: true,
@@ -96,6 +99,25 @@ async function main() {
                  ON CONFLICT (slug) DO UPDATE SET label = EXCLUDED.label, sort_order = EXCLUDED.sort_order`,
         [slug, label, sort === undefined ? 100 : Number(sort)]);
         console.log(`Saved category "${slug}" (${label}).`);
+        break;
+    }
+    case 'import': {
+        if (!name) throw new Error('Usage: import <file.json>');
+        const list = JSON.parse(readFileSync(name, 'utf8'));
+        const { rows } = await q('SELECT slug FROM categories');
+        const known = new Set(rows.map((r) => r.slug));
+        for (const s of list) {
+            if (!s.name || !(s.input?.keywords || s.input?.urls)) throw new Error(`Each search needs "name" and "input.keywords": ${JSON.stringify(s)}`);
+            if (s.category && !known.has(s.category)) throw new Error(`${s.name}: no category "${s.category}"`);
+            if (s.workplace && !['remote', 'hybrid'].includes(s.workplace)) throw new Error(`${s.name}: workplace must be remote or hybrid`);
+        }
+        for (const s of list) {
+            await q(`INSERT INTO searches (name, category, workplace, input, priority) VALUES ($1, $2, $3, $4, $5)
+                     ON CONFLICT (name) DO UPDATE SET category = EXCLUDED.category, workplace = EXCLUDED.workplace,
+                                                      input = EXCLUDED.input, priority = EXCLUDED.priority`,
+            [s.name, s.category ?? null, s.workplace ?? null, s.input, s.priority ?? 100]);
+        }
+        console.log(`Imported ${list.length} searches from ${name}.`);
         break;
     }
     case 'seed':
