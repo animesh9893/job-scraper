@@ -4,7 +4,11 @@ on:
   workflow_dispatch:            # "Run workflow" button in the Actions tab
     inputs:
       searches:
-        description: 'Search names, comma-separated (blank = next in rotation, all = every active search)'
+        description: 'Search names, comma-separated (blank = next in rotation, all = every active search, none = skip searches)'
+        required: false
+        default: ''
+      salaries:
+        description: 'Companies to fetch Glassdoor salaries for (blank = salaries.companiesPerRun, a number, or all = every company due)'
         required: false
         default: ''
   schedule:                     # every 3 hours: the next searchesPerRun searches in the rotation
@@ -22,7 +26,7 @@ jobs:
     # Secrets are only handed to code that is already on main, never to another branch.
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 120          # "all" runs every search, about 40s each
+    timeout-minutes: 300          # "all" runs every search (about 40s each) or every company's salaries (about 45s each)
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -34,6 +38,7 @@ jobs:
         run: node src/run.js "$SEARCHES"
         env:
           SEARCHES: ${{ inputs.searches }}
+          SALARIES: ${{ inputs.salaries }}
           APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
       - name: Send Telegram alerts

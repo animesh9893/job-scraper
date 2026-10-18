@@ -107,6 +107,10 @@ different employer, the salaries are skipped; if it has no such employer, that a
 site, each job shows its company's range (lowest to highest median across roles) and opens a list of every
 role, highest first; picking a company shows the list above its jobs.
 
+To fetch every company at once (including ones with no recent jobs), run the Scrape jobs workflow with
+`salaries` = `all` (and `searches` = `none` to skip the job searches), or locally `SALARIES=all node src/run.js none`.
+It stops when no Apify token has credit left; the companies it didn't reach are first in line next time.
+
 ```bash
 node src/companies.js salaries                 # fetch status per company
 node src/companies.js salaries razorpay        # one company's roles

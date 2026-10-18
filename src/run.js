@@ -3,6 +3,9 @@
 //                                              rotating searches that ran longest ago
 //        node src/run.js [search-name ...]   → just these searches
 //        node src/run.js all                 → every active search
+//        node src/run.js none                → no searches, only the steps after them (company IDs, salaries)
+// SALARIES=all fetches salaries for every company that's due, not only premium ones and ones with recent
+// jobs; SALARIES=<n> fetches up to n. Blank uses salaries.companiesPerRun.
 import { appendFileSync } from 'node:fs';
 import { loadConfig, requireEnv } from './config.js';
 import { openDb } from './db.js';
@@ -35,10 +38,11 @@ try {
 }
 
 const all = only.length === 1 && only[0] === 'all';
+const none = only.length === 1 && only[0] === 'none';
 await store.syncPremiumSearches(config.premium);
-const rows = await store.pickSearches({ names: all ? [] : only, all, limit: config.searchesPerRun });
-const missing = all ? [] : only.filter((name) => !rows.some((r) => r.name === name));
-if (missing.length || rows.length === 0) {
+const rows = none ? [] : await store.pickSearches({ names: all ? [] : only, all, limit: config.searchesPerRun });
+const missing = all || none ? [] : only.filter((name) => !rows.some((r) => r.name === name));
+if (missing.length || (rows.length === 0 && !none)) {
     const known = await store.allSearchNames();
     await store.close();
     fatal(missing.length
@@ -147,8 +151,12 @@ if (lookups.length) await store.syncPremiumSearches(config.premium);
 
 // Glassdoor salaries for companies never fetched or due a refresh (cached for salaries.refreshDays).
 const sal = config.salaries;
-const salaryCompanies = sal.companiesPerRun > 0 ? await store.companiesForSalaries(sal.companiesPerRun, sal.refreshDays) : [];
+const salaryMode = (process.env.SALARIES ?? '').trim();
+const salaryLimit = salaryMode === 'all' ? null : Number(salaryMode || sal.companiesPerRun);
+const salaryCompanies = salaryLimit === null || salaryLimit > 0
+    ? await store.companiesForSalaries(salaryLimit, sal.refreshDays, { everyCompany: salaryMode === 'all' }) : [];
 const salaryResults = [];
+let salaryCost = 0;
 if (salaryCompanies.length) console.log(`Salaries: ${salaryCompanies.map((c) => c.slug).join(', ')}`);
 for (const company of salaryCompanies) {
     // Every role each time: the Actor bills per salary found, so roles Glassdoor doesn't have cost nothing.
@@ -164,6 +172,7 @@ for (const company of salaryCompanies) {
             break;
         }
         const { items, runId: apifyRunId, costUsd } = outcome.result;
+        salaryCost += costUsd ?? 0;
         const rows = salaryRows(items, await store.fxRates([...new Set(items.map((i) => i.currency).filter(Boolean))]));
         const status = await store.saveSalaries(company.slug,
             { rows, glassdoorName: items[0]?.company_name ?? null, rating: items[0]?.company_rating ?? null });
@@ -199,7 +208,8 @@ const ok = results.filter((r) => r.ok);
 const sum = (key) => ok.reduce((n, r) => n + r[key], 0);
 const failed = results.length - ok.length;
 console.log(`\nDone: ${sum('found')} found, ${sum('added')} new, ${sum('skipped')} filtered, ` +
-    `~$${sum('costUsd').toFixed(4)} Apify cost` + (failed ? `, ${failed} search(es) failed` : ''));
+    `~$${sum('costUsd').toFixed(4)} Apify cost` + (failed ? `, ${failed} search(es) failed` : '') +
+    (salaryCompanies.length ? `; salaries for ${salaryCompanies.length} company(ies), ~$${salaryCost.toFixed(4)}` : ''));
 
 // In GitHub Actions, also show a results table on the run's summary page.
 if (process.env.GITHUB_STEP_SUMMARY) {
@@ -210,7 +220,8 @@ if (process.env.GITHUB_STEP_SUMMARY) {
         '### Scrape results', '',
         '| Search | Status | Found | New | Filtered | Cost |', '|---|---|---|---|---|---|',
         ...rows, '',
-        ...(salaryResults.length ? ['### Glassdoor salaries', '', '| Company | Status | Roles | Cost |', '|---|---|---|---|', ...salaryResults, ''] : []),
+        ...(salaryResults.length ? ['### Glassdoor salaries', '', '| Company | Status | Roles | Cost |', '|---|---|---|---|', ...salaryResults,
+            `| **Total** | | | $${salaryCost.toFixed(4)} |`, ''] : []),
     ].join('\n'));
 }
 
