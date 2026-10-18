@@ -59,7 +59,7 @@ async function main() {
         const name = values.name ?? existing?.name;
         if (!name) throw new Error('Give --name for a new company');
         const linkedinId = values['linkedin-id'];
-        if (linkedinId && !/^\d+$/.test(linkedinId)) throw new Error('--linkedin-id is the number in f_C= of a LinkedIn search URL');
+        if (linkedinId && !/^\d+(,\d+)*$/.test(linkedinId)) throw new Error('--linkedin-id is the number(s) in f_C= of a LinkedIn search URL, comma-separated');
         const moved = await upsertCompany(store, {
             slug, name, linkedin_id: linkedinId, linkedin_slug: values['linkedin-slug'], domain: values.domain,
             aliases: values.alias ?? [], ...(values.premium ? { is_premium: true, premium_source: 'default' } : {}),

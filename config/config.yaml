@@ -30,6 +30,9 @@ premium:
   intervalHours: 6
   jobsPerSearch: 25
   companiesPerSearch: 10
+  # Premium companies without a LinkedIn ID get it looked up from their LinkedIn page (learned from their
+  # jobs), this many per run, about $0.0015 each. A page without an ID is tried again a week later.
+  lookupsPerRun: 3
 
 # Apify tokens (table apify_tokens, then the APIFY_TOKEN secret): switch to the next one when the
 # current account has less than this many dollars of monthly credit left.

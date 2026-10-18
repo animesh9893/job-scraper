@@ -139,8 +139,10 @@ const el = (tag, props = {}, ...children) => {
 };
 
 const logoUrl = (domain) => `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`;
-const logo = (c) => c?.domain && el('img', {
-  className: 'logo', src: logoUrl(c.domain), alt: '', loading: 'lazy', referrerPolicy: 'no-referrer', onerror() { this.remove(); },
+// The company's LinkedIn logo, else its site's favicon.
+const logo = (c) => (c?.logoUrl || c?.domain) && el('img', {
+  className: 'logo', src: safeUrl(c.logoUrl) ?? logoUrl(c.domain), alt: '', loading: 'lazy', referrerPolicy: 'no-referrer',
+  onerror() { this.remove(); },
 });
 // The category and workplace counts are for all jobs, so they're hidden while other filters narrow the list.
 const countsShown = () => !state.q.trim() && !state.company && !state.premium;

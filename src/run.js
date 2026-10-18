@@ -6,7 +6,7 @@
 import { appendFileSync } from 'node:fs';
 import { loadConfig, requireEnv } from './config.js';
 import { openDb } from './db.js';
-import { createClient, runSearch, normalizeJob, passesFilters } from './scrape.js';
+import { createClient, runSearch, normalizeJob, passesFilters, fetchLinkedinCompany } from './scrape.js';
 import { loadTokens, checkToken, nextUsableToken } from './tokens.js';
 
 // In GitHub Actions, errors are also emitted as annotations so they show at the top of the run page.
@@ -118,10 +118,26 @@ for (const search of searches) {
     }
 }
 
-// Save the latest remaining credit of the token we ended on.
-if (token) await checkToken(store, token);
 const linked = await store.linkCompanies();
 console.log(`Linked ${linked} job(s) to companies`);
+
+// Premium companies without a LinkedIn ID: read it from their LinkedIn page, so the next run searches them.
+const lookups = await store.companiesToHydrate(config.premium.lookupsPerRun);
+if (lookups.length && await pickToken()) {
+    for (const { slug, linkedin_slug: page } of lookups) {
+        try {
+            const found = await fetchLinkedinCompany(createClient(token.token), page);
+            await store.saveLinkedinPage(slug, found);
+            console.log(`  ⓘ ${slug}: LinkedIn ID ${found.linkedinId ?? 'not found'} (linkedin.com/company/${page})`);
+        } catch (err) {
+            console.warn(`  ! ${slug}: couldn't read linkedin.com/company/${page}: ${err.message}`);
+        }
+    }
+    await store.syncPremiumSearches(config.premium);
+}
+
+// Save the latest remaining credit of the token we ended on.
+if (token) await checkToken(store, token);
 await store.close();
 
 const ok = results.filter((r) => r.ok);

@@ -70,7 +70,10 @@ CREATE TABLE IF NOT EXISTS companies (
     linkedin_id    TEXT,                            -- numeric id for LinkedIn's f_C filter
     linkedin_slug  TEXT UNIQUE,                     -- linkedin.com/company/<this>, matched against jobs.company_url
     name_keys      TEXT[] NOT NULL DEFAULT '{}',    -- company_key() of the name and aliases, matched against jobs.company
-    domain         TEXT,                            -- for the logo
+    domain         TEXT,                            -- fallback logo (favicon) when there's no logo_url
+    logo_url       TEXT,                            -- from its LinkedIn jobs
+    employees      INTEGER,                         -- from its LinkedIn page
+    linkedin_checked_at TIMESTAMPTZ,                -- when its LinkedIn page was last read for the ID
     is_premium     BOOLEAN NOT NULL DEFAULT false,
     premium_source TEXT CHECK (premium_source IN ('default', 'earned')),
     sort_order     INTEGER NOT NULL DEFAULT 100,
@@ -121,6 +124,21 @@ BEGIN
         ORDER BY key, first_seen_at
         ON CONFLICT DO NOTHING;
     END LOOP;
+
+    -- Learn each company's LinkedIn page (needed to look up its ID) and logo from its jobs.
+    UPDATE companies c SET linkedin_slug = s.ls
+    FROM (SELECT DISTINCT ON (ls) ls, company_slug
+          FROM (SELECT DISTINCT company_slug, linkedin_company_slug(company_url) AS ls FROM jobs
+                WHERE company_slug IN (SELECT slug FROM companies WHERE linkedin_slug IS NULL)) t
+          WHERE ls IS NOT NULL ORDER BY ls, company_slug) s
+    WHERE c.slug = s.company_slug AND c.linkedin_slug IS NULL
+      AND NOT EXISTS (SELECT 1 FROM companies o WHERE o.linkedin_slug = s.ls);
+    UPDATE companies c SET logo_url = s.logo
+    FROM (SELECT DISTINCT ON (company_slug) company_slug, raw->>'companyLogo' AS logo FROM jobs
+          WHERE company_slug IS NOT NULL AND raw->>'companyLogo' LIKE 'https://%'
+            AND first_seen_at > now() - interval '7 days'
+          ORDER BY company_slug, first_seen_at DESC) s
+    WHERE c.slug = s.company_slug AND c.logo_url IS DISTINCT FROM s.logo;
     RETURN linked;
 END $$;
 
@@ -158,7 +176,8 @@ CREATE OR REPLACE VIEW public_job_counts AS
 CREATE OR REPLACE VIEW public_companies AS
     SELECT c.slug, c.name, c.domain, c.is_premium AS "isPremium", c.sort_order AS "sortOrder",
            COUNT(j.id)::int AS jobs,
-           (COUNT(j.id) FILTER (WHERE j."firstSeenAt" > now() - interval '7 days'))::int AS "jobsWeek"
+           (COUNT(j.id) FILTER (WHERE j."firstSeenAt" > now() - interval '7 days'))::int AS "jobsWeek",
+           c.logo_url AS "logoUrl", c.employees
     FROM companies c LEFT JOIN public_jobs j ON j."companySlug" = c.slug
     GROUP BY c.slug;
 DO $$ BEGIN
@@ -310,6 +329,25 @@ export async function openDb() {
         /** Links jobs to companies, adding companies seen for the first time. Returns how many jobs it linked. */
         async linkCompanies() {
             return (await pool.query('SELECT link_companies() AS n')).rows[0].n;
+        },
+
+        /**
+         * Premium companies without a LinkedIn ID whose LinkedIn page is known (learned from their jobs) and
+         * wasn't read in the last week, so their ID can be looked up.
+         */
+        async companiesToHydrate(limit) {
+            return (await pool.query(
+                `SELECT slug, linkedin_slug FROM companies
+                 WHERE is_premium AND linkedin_id IS NULL AND linkedin_slug IS NOT NULL
+                   AND (linkedin_checked_at IS NULL OR linkedin_checked_at < now() - interval '7 days')
+                 ORDER BY sort_order, slug LIMIT $1`, [limit])).rows;
+        },
+
+        async saveLinkedinPage(slug, { linkedinId, employees }) {
+            await pool.query(
+                `UPDATE companies SET linkedin_id = COALESCE(linkedin_id, $2), employees = COALESCE($3, employees),
+                                      linkedin_checked_at = now() WHERE slug = $1`,
+                [slug, linkedinId, employees]);
         },
 
         /**

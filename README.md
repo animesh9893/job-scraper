@@ -78,14 +78,18 @@ posted in the last 7 hours, since the Actor bills every job it returns. Change t
 
 ```bash
 node src/companies.js                                  # premium companies, then the ones with most jobs
-node src/companies.js add flipkart --linkedin-id 123456 --alias "Flipkart Internet"   # set the ID or an alias
-node src/companies.js add groww --name Groww --domain groww.in --premium              # a new premium company
+node src/companies.js add flipkart --alias "Flipkart Internet"                       # add an alias (or --linkedin-id)
+node src/companies.js add groww --name Groww --linkedin-slug groww.in --premium     # a new premium company
 node src/companies.js unpremium oracle                 # stop searching it and drop its chip
 ```
 
 A company's LinkedIn ID is the number after `f_C=` in the URL of a LinkedIn job search filtered by
-that company. Flipkart, Zomato, Razorpay, PhonePe, CRED and Zerodha don't have one yet, so they're
-matched by name from the other searches until it's added.
+that company (some have several, like Razorpay's `2770855,13616753,3788927`; keep them all). You don't
+have to look it up: after each scrape, every company learns its LinkedIn page and logo from its jobs,
+and for up to `premium.lookupsPerRun` premium companies without an ID the scraper reads their public
+LinkedIn page (about $0.0015 each), saves the ID and employee count, and adds them to the premium
+searches. A premium company that hasn't shown up in any job yet needs `--linkedin-slug` (the part after
+`linkedin.com/company/`) for this.
 
 ## Public job board on Vercel (live from Supabase)
 
