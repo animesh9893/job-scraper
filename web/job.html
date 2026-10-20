@@ -107,19 +107,29 @@
   .credits a { color: var(--accent); text-decoration: none; font-weight: 600; }
   .credits a:hover { text-decoration: underline; }
   @media (max-width: 560px) { .credits { margin-left: 0; } }
+  /* On wide screens the footer sits in a sticky left column, so Developed by stays in view. */
+  @media (min-width: 1000px) {
+    .wrap { max-width: 1180px; display: grid; grid-template-columns: 240px minmax(0, 880px); justify-content: center; column-gap: 40px; }
+    .main-col { grid-column: 2; grid-row: 1; min-width: 0; }
+    .site-foot { grid-column: 1; grid-row: 1; align-self: start; position: sticky; top: 24px; margin-top: 64px; flex-direction: column; flex-wrap: nowrap; }
+    .site-foot .foot-text { flex: none; }
+    .credits { margin-left: 0; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <nav class="site-links" aria-label="Site policies"><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="copyright.html">Copyright</a></nav>
-  <nav class="bar" aria-label="Site">
-    <a class="brand" href="./"><img src="logo.svg" alt=""><span>Tech Jobs</span></a>
-    <a class="btn" href="./">⌂ Home</a>
-    <button class="btn refresh" id="refresh" type="button"><span class="icon" aria-hidden="true">↻</span> Refresh</button>
-  </nav>
-  <p class="fresh" id="fresh">🔔 New jobs are added every few hours. <button type="button" id="refresh2">Refresh</button> to see the latest.</p>
+  <div class="main-col">
+    <nav class="site-links" aria-label="Site policies"><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="copyright.html">Copyright</a></nav>
+    <nav class="bar" aria-label="Site">
+      <a class="brand" href="./"><img src="logo.svg" alt=""><span>Tech Jobs</span></a>
+      <a class="btn" href="./">⌂ Home</a>
+      <button class="btn refresh" id="refresh" type="button"><span class="icon" aria-hidden="true">↻</span> Refresh</button>
+    </nav>
+    <p class="fresh" id="fresh">🔔 New jobs are added every few hours. <button type="button" id="refresh2">Refresh</button> to see the latest.</p>
 
-  <main id="main"><p class="empty">Loading job…</p></main>
+    <main id="main"><p class="empty">Loading job…</p></main>
+  </div>
 
   <div class="site-foot">
     <div class="foot-text">

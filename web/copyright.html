@@ -37,39 +37,50 @@
   .credits a { color: var(--accent); text-decoration: none; font-weight: 600; }
   .credits a:hover { text-decoration: underline; }
   @media (max-width: 560px) { .credits { margin-left: 0; } }
+  /* On wide screens the footer sits in a sticky left column, so Developed by stays in view. */
+  @media (min-width: 1000px) {
+    .wrap { max-width: 1180px; display: grid; grid-template-columns: 240px minmax(0, 760px); justify-content: center; column-gap: 40px; }
+    .main-col { grid-column: 2; grid-row: 1; min-width: 0; }
+    .site-foot { grid-column: 1; grid-row: 1; align-self: start; position: sticky; top: 24px; margin-top: 64px; flex-direction: column; flex-wrap: nowrap; }
+    .site-foot .foot-text { flex: none; }
+    .credits { margin-left: 0; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <nav class="site-nav" aria-label="Site">
-    <a class="brand" href="./"><img src="logo.svg" alt=""><span>Tech Jobs</span></a>
-    <span class="links"><a href="./">Jobs</a>
-    <a href="terms.html">Terms</a>
-    <a href="privacy.html">Privacy</a>
-    <a href="copyright.html" aria-current="page">Copyright</a></span>
-  </nav>
-  <main>
-    <h1>Copyright &amp; Takedown</h1>
-    <p class="updated">Last updated: 20 October 2026</p>
+  <div class="main-col">
+    <nav class="site-nav" aria-label="Site">
+      <a class="brand" href="./"><img src="logo.svg" alt=""><span>Tech Jobs</span></a>
+      <span class="links"><a href="./">Jobs</a>
+      <a href="terms.html">Terms</a>
+      <a href="privacy.html">Privacy</a>
+      <a href="copyright.html" aria-current="page">Copyright</a></span>
+    </nav>
+    <main>
+      <h1>Copyright &amp; Takedown</h1>
+      <p class="updated">Last updated: 20 October 2026</p>
 
-    <h2>We only use publicly available data</h2>
-    <p>This site aggregates job listings and salary information that are already publicly available on the internet, mainly from LinkedIn job posts and Glassdoor salary pages. We show a short summary of each listing and always link back to the original source so you can apply there. We do not claim ownership of any of this content.</p>
+      <h2>We only use publicly available data</h2>
+      <p>This site aggregates job listings and salary information that are already publicly available on the internet, mainly from LinkedIn job posts and Glassdoor salary pages. We show a short summary of each listing and always link back to the original source so you can apply there. We do not claim ownership of any of this content.</p>
 
-    <h2>Trademarks and ownership</h2>
-    <p>Job descriptions belong to the employers who wrote them. LinkedIn, Glassdoor and all company names and logos are trademarks of their respective owners. This site is not affiliated with, endorsed by or sponsored by any of them.</p>
+      <h2>Trademarks and ownership</h2>
+      <p>Job descriptions belong to the employers who wrote them. LinkedIn, Glassdoor and all company names and logos are trademarks of their respective owners. This site is not affiliated with, endorsed by or sponsored by any of them.</p>
 
-    <h2>Report or remove content</h2>
-    <p>If you believe something on this site infringes your copyright or trademark, is inaccurate, or should not be listed for any other reason, please email <strong><a href="mailto:animesh.shrivatri2002@gmail.com">animesh.shrivatri2002@gmail.com</a></strong> and include:</p>
-    <ul>
-      <li>a link to the page or listing on this site,</li>
-      <li>what the problem is (for example, copyrighted text, an expired job, or personal information), and</li>
-      <li>how we can reach you.</li>
-    </ul>
-    <p>We review every report and remove or correct content that should not be here as quickly as we can.</p>
+      <h2>Report or remove content</h2>
+      <p>If you believe something on this site infringes your copyright or trademark, is inaccurate, or should not be listed for any other reason, please email <strong><a href="mailto:animesh.shrivatri2002@gmail.com">animesh.shrivatri2002@gmail.com</a></strong> and include:</p>
+      <ul>
+        <li>a link to the page or listing on this site,</li>
+        <li>what the problem is (for example, copyrighted text, an expired job, or personal information), and</li>
+        <li>how we can reach you.</li>
+      </ul>
+      <p>We review every report and remove or correct content that should not be here as quickly as we can.</p>
 
-    <h2>Site content</h2>
-    <p>The site design, code and original text are © 2026 Tech Jobs. All rights reserved.</p>
-  </main>
+      <h2>Site content</h2>
+      <p>The site design, code and original text are © 2026 Tech Jobs. All rights reserved.</p>
+    </main>
+  </div>
+
   <div class="site-foot">
     <div class="foot-text">
       <footer>Questions, corrections or takedown requests: <a href="mailto:animesh.shrivatri2002@gmail.com">animesh.shrivatri2002@gmail.com</a></footer>

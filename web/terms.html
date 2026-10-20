@@ -37,53 +37,64 @@
   .credits a { color: var(--accent); text-decoration: none; font-weight: 600; }
   .credits a:hover { text-decoration: underline; }
   @media (max-width: 560px) { .credits { margin-left: 0; } }
+  /* On wide screens the footer sits in a sticky left column, so Developed by stays in view. */
+  @media (min-width: 1000px) {
+    .wrap { max-width: 1180px; display: grid; grid-template-columns: 240px minmax(0, 760px); justify-content: center; column-gap: 40px; }
+    .main-col { grid-column: 2; grid-row: 1; min-width: 0; }
+    .site-foot { grid-column: 1; grid-row: 1; align-self: start; position: sticky; top: 24px; margin-top: 64px; flex-direction: column; flex-wrap: nowrap; }
+    .site-foot .foot-text { flex: none; }
+    .credits { margin-left: 0; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <nav class="site-nav" aria-label="Site">
-    <a class="brand" href="./"><img src="logo.svg" alt=""><span>Tech Jobs</span></a>
-    <span class="links"><a href="./">Jobs</a>
-    <a href="terms.html" aria-current="page">Terms</a>
-    <a href="privacy.html">Privacy</a>
-    <a href="copyright.html">Copyright</a></span>
-  </nav>
-  <main>
-    <h1>Terms &amp; Conditions</h1>
-    <p class="updated">Last updated: 20 October 2026</p>
-    <p>By using this website you agree to these terms. If you do not agree, please do not use the site.</p>
+  <div class="main-col">
+    <nav class="site-nav" aria-label="Site">
+      <a class="brand" href="./"><img src="logo.svg" alt=""><span>Tech Jobs</span></a>
+      <span class="links"><a href="./">Jobs</a>
+      <a href="terms.html" aria-current="page">Terms</a>
+      <a href="privacy.html">Privacy</a>
+      <a href="copyright.html">Copyright</a></span>
+    </nav>
+    <main>
+      <h1>Terms &amp; Conditions</h1>
+      <p class="updated">Last updated: 20 October 2026</p>
+      <p>By using this website you agree to these terms. If you do not agree, please do not use the site.</p>
 
-    <h2>What this site is</h2>
-    <p>Tech Jobs is a free job board that collects publicly available job listings (mainly from LinkedIn) and publicly available salary information (from Glassdoor) and shows them in one place. We only aggregate and link to information that is already public. We do not post jobs on behalf of employers, we do not take applications, and we do not act as a recruiter or agent.</p>
+      <h2>What this site is</h2>
+      <p>Tech Jobs is a free job board that collects publicly available job listings (mainly from LinkedIn) and publicly available salary information (from Glassdoor) and shows them in one place. We only aggregate and link to information that is already public. We do not post jobs on behalf of employers, we do not take applications, and we do not act as a recruiter or agent.</p>
 
-    <h2>Not affiliated</h2>
-    <p>This site is an independent project. It is not affiliated with, endorsed by or sponsored by LinkedIn, Glassdoor, or any company whose jobs appear here. All company names, logos and trademarks belong to their respective owners and are used only to identify the listing.</p>
+      <h2>Not affiliated</h2>
+      <p>This site is an independent project. It is not affiliated with, endorsed by or sponsored by LinkedIn, Glassdoor, or any company whose jobs appear here. All company names, logos and trademarks belong to their respective owners and are used only to identify the listing.</p>
 
-    <h2>Accuracy</h2>
-    <p>Listings and salaries are collected automatically and may be out of date, incomplete or wrong. A job may already be filled or removed from the original site. Salary figures are estimates reported by third parties. Always check the details on the original posting before you apply or make any decision. Everything on this site is provided “as is”, without warranties of any kind.</p>
+      <h2>Accuracy</h2>
+      <p>Listings and salaries are collected automatically and may be out of date, incomplete or wrong. A job may already be filled or removed from the original site. Salary figures are estimates reported by third parties. Always check the details on the original posting before you apply or make any decision. Everything on this site is provided “as is”, without warranties of any kind.</p>
 
-    <h2>Applying for jobs</h2>
-    <p>When you click to apply you leave this site and go to the original posting. Your application is between you and the employer or the platform hosting the post. We are not responsible for the content, hiring decisions or practices of any employer or third-party site. Never pay anyone to get a job, and be careful with any posting that asks for money or sensitive personal details.</p>
+      <h2>Applying for jobs</h2>
+      <p>When you click to apply you leave this site and go to the original posting. Your application is between you and the employer or the platform hosting the post. We are not responsible for the content, hiring decisions or practices of any employer or third-party site. Never pay anyone to get a job, and be careful with any posting that asks for money or sensitive personal details.</p>
 
-    <h2>Acceptable use</h2>
-    <ul>
-      <li>Use the site for personal, non-commercial job searching.</li>
-      <li>Do not try to disrupt the site, overload it, or bulk copy its contents.</li>
-      <li>Do not use the site for anything unlawful.</li>
-    </ul>
+      <h2>Acceptable use</h2>
+      <ul>
+        <li>Use the site for personal, non-commercial job searching.</li>
+        <li>Do not try to disrupt the site, overload it, or bulk copy its contents.</li>
+        <li>Do not use the site for anything unlawful.</li>
+      </ul>
 
-    <h2>Limitation of liability</h2>
-    <p>To the extent allowed by law, we are not liable for any loss or damage that comes from using this site or relying on any information on it.</p>
+      <h2>Limitation of liability</h2>
+      <p>To the extent allowed by law, we are not liable for any loss or damage that comes from using this site or relying on any information on it.</p>
 
-    <h2>Removal and reports</h2>
-    <p>If you are an employer, a rights holder, or anyone who wants a listing corrected or removed, see our <a href="copyright.html">Copyright &amp; Takedown</a> page or email <a href="mailto:animesh.shrivatri2002@gmail.com">animesh.shrivatri2002@gmail.com</a>.</p>
+      <h2>Removal and reports</h2>
+      <p>If you are an employer, a rights holder, or anyone who wants a listing corrected or removed, see our <a href="copyright.html">Copyright &amp; Takedown</a> page or email <a href="mailto:animesh.shrivatri2002@gmail.com">animesh.shrivatri2002@gmail.com</a>.</p>
 
-    <h2>Changes</h2>
-    <p>We may update these terms from time to time. The date at the top shows when they last changed. Continuing to use the site means you accept the updated terms.</p>
+      <h2>Changes</h2>
+      <p>We may update these terms from time to time. The date at the top shows when they last changed. Continuing to use the site means you accept the updated terms.</p>
 
-    <h2>Contact</h2>
-    <p><a href="mailto:animesh.shrivatri2002@gmail.com">animesh.shrivatri2002@gmail.com</a></p>
-  </main>
+      <h2>Contact</h2>
+      <p><a href="mailto:animesh.shrivatri2002@gmail.com">animesh.shrivatri2002@gmail.com</a></p>
+    </main>
+  </div>
+
   <div class="site-foot">
     <div class="foot-text">
       <footer>Questions, corrections or takedown requests: <a href="mailto:animesh.shrivatri2002@gmail.com">animesh.shrivatri2002@gmail.com</a></footer>
