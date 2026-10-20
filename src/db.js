@@ -283,7 +283,8 @@ CREATE OR REPLACE VIEW post_candidates AS
                      + GREATEST(0, 20 - EXTRACT(EPOCH FROM now() - j.first_seen_at) / 3600 / 72 * 20)
                      + CASE WHEN cardinality(j.tags) > 0 THEN 5 ELSE 0 END)::numeric, 1) AS score,
                row_number() OVER (PARTITION BY COALESCE(j.company_slug, j.company)
-                                  ORDER BY j.first_seen_at DESC, j.job_id) AS nth_at_company
+                                  ORDER BY j.first_seen_at DESC, j.job_id) AS nth_at_company,
+               j.salary, j.apply_url
         FROM jobs j
         LEFT JOIN company_index ci ON ci.slug = j.company_slug
         WHERE j.status <> 'skipped' AND j.first_seen_at > now() - interval '3 days'

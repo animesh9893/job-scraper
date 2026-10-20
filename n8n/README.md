@@ -8,7 +8,7 @@ Each person (Animesh, Sachin, …) runs their own n8n on Railway with their own 
    They show on the private page `/posts.html` and, as data, in the Supabase view `public_linkedin_posts`.
 3. **Ping**: the same run calls each person's n8n webhook (GitHub secret `N8N_WEBHOOK_<ID>`) with the post ID.
 4. **Fetch and check** (n8n): reads the post from Supabase and checks it against the template (first line,
-   numbered job lines, one link to its `/alert.html` page, 1 to 5 hashtags, at most 3,000 characters).
+   numbered job lines, at most one link per job and one link to its `/alert.html` page at the end, 1 to 5 hashtags, at most 3,000 characters).
 5. **Email approval** (n8n): emails you the post with Approve and Decline buttons, and waits.
 6. **Post** (n8n): on Approve, posts it to your LinkedIn with your LinkedIn credential.
 7. **Report back** (n8n): tells the site the post was posted (with its LinkedIn link) or declined, so the posts
@@ -63,12 +63,17 @@ Report back: `POST <siteUrl>/api/post-status` with `Authorization: Bearer <token
 🚀 𝗛𝗶𝗿𝗶𝗻𝗴 𝗮𝗹𝗲𝗿𝘁: 𝟲 𝗻𝗲𝘄 𝗼𝗽𝗲𝗻𝗶𝗻𝗴𝘀 𝗮𝘁 𝟱 𝗰𝗼𝗺𝗽𝗮𝗻𝗶𝗲𝘀
 
 1. 𝗚𝗼𝗼𝗴𝗹𝗲: Senior Software Engineer · 𝘉𝘦𝘯𝘨𝘢𝘭𝘶𝘳𝘶
+💰 ~₹45L/yr on Glassdoor
+🔗 https://www.linkedin.com/jobs/view/4123456789
+
 2. 𝗥𝗮𝘇𝗼𝗿𝗽𝗮𝘆: Backend Engineer (Golang) · 𝘉𝘦𝘯𝘨𝘢𝘭𝘶𝘳𝘶 (𝘙𝘦𝘮𝘰𝘵𝘦)
+🔗 https://www.linkedin.com/jobs/view/4123456790
+
 …
 
 🔥 𝗜𝗻 𝗱𝗲𝗺𝗮𝗻𝗱: Go, React, AWS
 
-👉 𝗘𝘃𝗲𝗿𝘆 𝗼𝗽𝗲𝗻𝗶𝗻𝗴 𝘄𝗶𝘁𝗵 𝗶𝘁𝘀 𝗮𝗽𝗽𝗹𝘆 𝗹𝗶𝗻𝗸: https://…/alert.html?id=12
+👉 𝗔𝗹𝗹 𝗼𝗳 𝘁𝗵𝗲𝗺 𝗼𝗻 𝗼𝗻𝗲 𝗽𝗮𝗴𝗲: https://…/alert.html?id=12
 
 #hiring #softwareengineering #techjobs #go #react
 ```
@@ -76,6 +81,10 @@ Report back: `POST <siteUrl>/api/post-status` with `Authorization: Bearer <token
 LinkedIn has no bold or italic, so the heading, labels and company names use Unicode bold letters and places use
 Unicode italic ones, the way LinkedIn formatters do it. Job titles and hashtags stay plain so LinkedIn search finds
 them.
+
+Each job has its own link (its LinkedIn job page, or its apply link for other sources) and, when known, its pay:
+the salary the listing shows, else the Glassdoor median for the closest role at that company (`payFor()`). Jobs
+without either just skip that line.
 
 It's written by `buildPost()` and checked by `checkPost()` in `src/linkedin-posts.js`. The workflow's "Check
 against template" node runs the same checks; change both together.
