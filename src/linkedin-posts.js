@@ -120,7 +120,8 @@ export function jobLink({ job_id: jobId, url, apply_url: applyUrl }, siteUrl) {
 
 /**
  * The post text: a bold heading; for each job a numbered line (company in bold, place in italics), its pay when
- * known (job.pay, see payFor) and its link to the job's page on the site (see jobLink); the most named tech; a link to the post's /alert.html page; hashtags.
+ * known (job.pay, see payFor) and its link to the job's page on the site (see jobLink); the most named tech; a link to the
+ * board's home page; hashtags.
  * Job titles and hashtags stay plain so LinkedIn search finds them.
  */
 export function buildPost({ id, jobs, siteUrl, hashtags = [], maxHashtags = 10 }) {
@@ -137,7 +138,7 @@ export function buildPost({ id, jobs, siteUrl, hashtags = [], maxHashtags = 10 }
             '',
         ]),
         ...(top.length ? [`🔥 ${bold('In demand:')} ${top.join(', ')}`, ''] : []),
-        `👉 ${bold('All of them on one page:')} ${siteUrl.replace(/\/$/, '')}/alert.html?id=${id}`,
+        `👉 ${bold('More jobs, updated every few hours:')} ${siteUrl.replace(/\/$/, '')}/`,
         '',
         tags.map((t) => `#${t}`).join(' '),
     ].join('\n');
@@ -159,8 +160,8 @@ export function checkPost(body) {
     const jobs = lines.filter((l) => /^\d+\. .+: .+/.test(l)).length;
     if (jobs < 1 || jobs > 15) problems.push(`${jobs} job lines, expected 1 to 15`);
     const links = text.match(/https?:\/\/\S+/g) ?? [];
-    const alert = links.filter((l) => /\/alert\.html\?id=\d+$/.test(l));
-    if (alert.length !== 1 || alert[0] !== links.at(-1)) problems.push('needs one link to /alert.html?id=…, after all the others');
+    const home = links.filter((l) => /^https?:\/\/[^/\s]+\/?$/.test(l));
+    if (home.length !== 1 || home[0] !== links.at(-1)) problems.push('needs one link to the board\'s home page, after all the others');
     if (links.length - 1 > jobs) problems.push(`${links.length - 1} job links for ${jobs} jobs`);
     const tags = (lines.at(-1) ?? '').match(/#\w+/g) ?? [];
     if (tags.length < 1 || tags.length > 12) problems.push(`${tags.length} hashtags on the last line, expected 1 to 12`);
@@ -233,6 +234,12 @@ async function main() {
         const split = splitJobs(candidates, cfg.people, cfg.jobsPerPost);
         for (const person of cfg.people) {
             const jobs = split.get(person.id);
+            const { rows: [last] } = await store.query(
+                `SELECT EXTRACT(EPOCH FROM now() - max(created_at)) / 3600 AS hours FROM posts WHERE person = $1`, [person.id]);
+            if (last?.hours != null && last.hours < cfg.everyHours - 0.5) {   // half an hour of slack: scrape start times drift
+                console.log(`  ${person.id}: last post ${Number(last.hours).toFixed(1)}h ago, next after ${cfg.everyHours}h`);
+                continue;
+            }
             if (jobs.length < cfg.minJobs) {
                 console.log(`  ${person.id}: ${jobs.length} new job(s), fewer than ${cfg.minJobs}, no post`);
                 continue;

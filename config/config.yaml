@@ -93,7 +93,8 @@ site:
 # is pinged (GitHub secret N8N_WEBHOOK_<ID>, e.g. N8N_WEBHOOK_ANIMESH) to email the post for approval and
 # publish it. Setup: n8n/README.md.
 linkedin:
-  siteUrl: https://job-scraper-web-beryl.vercel.app # the job board; posts link each job to its /job.html page and the post to /alert.html
+  siteUrl: https://job-scraper-web-beryl.vercel.app # the job board; posts link each job to its /job.html page and end with the home page
+  everyHours: 4         # at most one post per person this often; scrapes in between keep their jobs for the next post
   jobsPerPost: 6
   minJobs: 3            # no post for a person who would get fewer new jobs than this
   hashtags: [hiring, softwareengineering, techjobs, jobsearch]

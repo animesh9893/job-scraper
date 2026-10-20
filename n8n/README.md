@@ -4,11 +4,12 @@ Each person (Animesh, Sachin, …) runs their own n8n on Railway with their own 
 
 1. **Scrape** (GitHub Actions, every 3 hours): new jobs are stored, tagged and ranked.
 2. **Write posts** (`src/linkedin-posts.js`, same run): the best new jobs are split between the people in
-   `config/config.yaml` → `linkedin.people`, so each gets a different set, and one post is written for each.
+   `config/config.yaml` → `linkedin.people`, so each gets a different set, and one post is written for each,
+   at most once every `linkedin.everyHours` (4) per person; scrapes in between keep their jobs for the next post.
    They show on the private page `/posts.html` and, as data, in the Supabase view `public_linkedin_posts`.
 3. **Ping**: the same run calls each person's n8n webhook (GitHub secret `N8N_WEBHOOK_<ID>`) with the post ID.
 4. **Fetch and check** (n8n): reads the post from Supabase and checks it against the template (first line,
-   numbered job lines, at most one link per job and one link to its `/alert.html` page at the end, 1 to 12 hashtags, at most 3,000 characters).
+   numbered job lines, at most one link per job and one link to the board's home page at the end, 1 to 12 hashtags, at most 3,000 characters).
 5. **Telegram approval** (n8n): sends you the post's picture (view `public_post_images`), then the post with
    Approve and Decline buttons, and waits.
 6. **Post** (n8n): on Approve, fetches the picture again and posts it with the text to your LinkedIn with your
@@ -97,7 +98,7 @@ Report back: `POST <siteUrl>/api/post-status` with `Authorization: Bearer <token
 
 🔥 𝗜𝗻 𝗱𝗲𝗺𝗮𝗻𝗱: Go, React, AWS
 
-👉 𝗔𝗹𝗹 𝗼𝗳 𝘁𝗵𝗲𝗺 𝗼𝗻 𝗼𝗻𝗲 𝗽𝗮𝗴𝗲: https://…/alert.html?id=12
+👉 𝗠𝗼𝗿𝗲 𝗷𝗼𝗯𝘀, 𝘂𝗽𝗱𝗮𝘁𝗲𝗱 𝗲𝘃𝗲𝗿𝘆 𝗳𝗲𝘄 𝗵𝗼𝘂𝗿𝘀: https://job-scraper-web-beryl.vercel.app/
 
 #hiring #softwareengineering #techjobs #jobsearch #backenddeveloper #go #react #aws #bengalurujobs #remotejobs
 ```
