@@ -99,6 +99,14 @@
   .site-links a:hover { color: var(--accent); text-decoration: underline; }
   .legal { margin-top: 8px; color: var(--muted); font-size: 12px; }
   .legal a { color: var(--muted); }
+  .site-foot { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px 24px; margin-top: 32px; }
+  .site-foot .foot-text { flex: 1 1 320px; min-width: 0; }
+  .site-foot .foot-text > footer { margin-top: 0; }
+  .credits { flex: 0 0 auto; margin-left: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; font-size: 13px; display: grid; gap: 4px; }
+  .credits-title { margin: 0 0 2px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  .credits a { color: var(--accent); text-decoration: none; font-weight: 600; }
+  .credits a:hover { text-decoration: underline; }
+  @media (max-width: 560px) { .credits { margin-left: 0; } }
 </style>
 </head>
 <body>
@@ -113,8 +121,17 @@
 
   <main id="main"><p class="empty">Loading job…</p></main>
 
-  <footer>We list openings from LinkedIn; apply on the original post. <a href="./">See every job on the board</a>.</footer>
-  <p class="legal">Job data comes from public LinkedIn and Glassdoor pages; not affiliated with either. <a href="terms.html">Terms</a> · <a href="privacy.html">Privacy</a> · <a href="copyright.html">Copyright &amp; takedown</a> · Report: <a href="mailto:animesh.shrivatri2002@gmail.com">animesh.shrivatri2002@gmail.com</a></p>
+  <div class="site-foot">
+    <div class="foot-text">
+      <footer>We list openings from LinkedIn; apply on the original post. <a href="./">See every job on the board</a>.</footer>
+      <p class="legal">Job data comes from public LinkedIn and Glassdoor pages; not affiliated with either. <a href="terms.html">Terms</a> · <a href="privacy.html">Privacy</a> · <a href="copyright.html">Copyright &amp; takedown</a> · Report: <a href="mailto:animesh.shrivatri2002@gmail.com">animesh.shrivatri2002@gmail.com</a></p>
+    </div>
+    <aside class="credits" aria-label="Developed by">
+      <p class="credits-title">Developed by</p>
+      <a href="https://www.linkedin.com/in/shrivatrianimesh/" rel="noopener" target="_blank">Animesh Shrivatri</a>
+      <a href="https://www.linkedin.com/in/sachin-singh-lodhi/" rel="noopener" target="_blank">Sachin Singh Lodhi</a>
+    </aside>
+  </div>
 </div>
 
 <script src="config.js"></script>
