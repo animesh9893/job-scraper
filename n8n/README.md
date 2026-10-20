@@ -1,6 +1,6 @@
 # LinkedIn hiring-alert posts with n8n
 
-Each person (Animesh, Sachin, …) runs their own n8n on Railway with their own LinkedIn and email. The flow:
+Each person (Animesh, Sachin, …) runs their own n8n on Railway with their own LinkedIn and Telegram. The flow:
 
 1. **Scrape** (GitHub Actions, every 3 hours): new jobs are stored, tagged and ranked.
 2. **Write posts** (`src/linkedin-posts.js`, same run): the best new jobs are split between the people in
@@ -9,7 +9,7 @@ Each person (Animesh, Sachin, …) runs their own n8n on Railway with their own 
 3. **Ping**: the same run calls each person's n8n webhook (GitHub secret `N8N_WEBHOOK_<ID>`) with the post ID.
 4. **Fetch and check** (n8n): reads the post from Supabase and checks it against the template (first line,
    numbered job lines, at most one link per job and one link to its `/alert.html` page at the end, 1 to 5 hashtags, at most 3,000 characters).
-5. **Email approval** (n8n): emails you the post with Approve and Decline buttons, and waits.
+5. **Telegram approval** (n8n): sends you the post on Telegram with Approve and Decline buttons, and waits.
 6. **Post** (n8n): on Approve, posts it to your LinkedIn with your LinkedIn credential.
 7. **Report back** (n8n): tells the site the post was posted (with its LinkedIn link) or declined, so the posts
    page shows it.
@@ -24,12 +24,13 @@ Do this once per person; `<ID>` is their id in `linkedin.people` in capitals (`A
    from your own n8n.
 2. **Import the workflow.** In n8n: Workflows → Import from file → `n8n/hiring-alert-workflow.json`.
 3. **Fill in the Settings node:** `person` (your id, e.g. `sachin`), `siteUrl` (the job board), `supabaseUrl`
-   and `supabaseKey` (the public values from `web/config.js`), `approvalEmail` (where approval emails go) and
+   and `supabaseKey` (the public values from `web/config.js`), `telegramChatId` (yours: message @userinfobot on Telegram) and
    `token` (step 1).
 4. **Webhook auth.** Open the Webhook node → Authentication: Header Auth → new credential with name
    `Authorization` and value `Bearer <token>`.
-5. **Email.** Open "Ask for approval" and "Report failed check" and pick a Gmail credential (Google sign-in in
-   n8n). Any other email node with "Send and Wait for Response" works too.
+5. **Telegram.** Make a new bot for approvals with @BotFather (not the job-alerts bot) and send it any message
+   so it may write to you. Open "Ask for approval" and "Report failed check" and create a Telegram credential
+   with the bot's token.
 6. **LinkedIn.** Create an app at linkedin.com/developers on a LinkedIn Page you own, add the products "Share on
    LinkedIn" and "Sign In with LinkedIn using OpenID Connect", put n8n's OAuth redirect URL in the app, then open
    "Post to LinkedIn", create a LinkedIn credential with the app's client ID and secret, and pick yourself under

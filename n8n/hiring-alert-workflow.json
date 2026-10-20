@@ -59,8 +59,8 @@
             },
             {
               "id": "9bf79611-3ad4-4baf-9c06-1ecd9afa978b",
-              "name": "approvalEmail",
-              "value": "you@example.com",
+              "name": "telegramChatId",
+              "value": "your chat id, from @userinfobot",
               "type": "string"
             },
             {
@@ -186,15 +186,15 @@
     },
     {
       "parameters": {
+        "resource": "message",
         "operation": "sendAndWait",
-        "sendTo": "={{ $('Settings').first().json.approvalEmail }}",
-        "subject": "=LinkedIn post {{ $json.id }}: {{ $json.jobs }} jobs, post it?",
-        "message": "={{ $json.body }}",
+        "chatId": "={{ $('Settings').first().json.telegramChatId }}",
+        "message": "={{ ('LinkedIn post ' + $json.id + ', ' + $json.jobs + ' jobs. Post it?\\n\\n' + $json.body).replace(/([_*`\\[])/g, '\\\\$1') }}",
         "approvalOptions": {
           "values": {
             "approvalType": "double",
-            "approveLabel": "Approve and post",
-            "disapproveLabel": "Decline"
+            "approveLabel": "✅ Approve and post",
+            "disapproveLabel": "❌ Decline"
           }
         },
         "options": {
@@ -204,13 +204,14 @@
               "resumeAmount": 2,
               "resumeUnit": "days"
             }
-          }
+          },
+          "appendAttribution": false
         }
       },
       "id": "8ec8ddb3-82eb-47c6-8ac0-7040b06d2123",
       "name": "Ask for approval",
-      "type": "n8n-nodes-base.gmail",
-      "typeVersion": 2.1,
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
       "position": [
         1100,
         200
@@ -219,16 +220,19 @@
     },
     {
       "parameters": {
-        "sendTo": "={{ $('Settings').first().json.approvalEmail }}",
-        "subject": "=LinkedIn post {{ $json.id }} doesn't match the template",
-        "emailType": "text",
-        "message": "=Not sent for approval:\n{{ $json.problems.join('\\n') }}\n\n{{ $json.body }}",
-        "options": {}
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $('Settings').first().json.telegramChatId }}",
+        "text": "={{ ('LinkedIn post ' + $json.id + \" doesn't match the template, so it wasn't sent for approval:\\n\" + $json.problems.join('\\n') + '\\n\\n' + $json.body).replace(/([_*`\\[])/g, '\\\\$1') }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_web_page_preview": true
+        }
       },
       "id": "d886e040-f1db-4b28-a82b-8cbc28173842",
       "name": "Report failed check",
-      "type": "n8n-nodes-base.gmail",
-      "typeVersion": 2.1,
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
       "position": [
         1100,
         420
