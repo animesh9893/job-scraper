@@ -31,7 +31,7 @@
             {
               "id": "abb4e120-a502-46c9-8ad5-84fe3c4c26f7",
               "name": "siteUrl",
-              "value": "https://job-scraper-web.vercel.app",
+              "value": "https://job-scraper-web-beryl.vercel.app",
               "type": "string"
             },
             {
