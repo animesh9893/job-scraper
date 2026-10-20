@@ -233,7 +233,7 @@ async function main() {
         for (const job of candidates) job.pay = payFor(job, salaries);
         const split = splitJobs(candidates, cfg.people, cfg.jobsPerPost);
         for (const person of cfg.people) {
-            const jobs = split.get(person.id);
+            let jobs = split.get(person.id);
             const { rows: [last] } = await store.query(
                 `SELECT EXTRACT(EPOCH FROM now() - max(created_at)) / 3600 AS hours FROM posts WHERE person = $1`, [person.id]);
             if (last?.hours != null && last.hours < cfg.everyHours - 0.5) {   // half an hour of slack: scrape start times drift
@@ -245,7 +245,12 @@ async function main() {
                 continue;
             }
             const { rows: [{ id }] } = await store.query('INSERT INTO posts (person) VALUES ($1) RETURNING id', [person.id]);
-            const body = buildPost({ id, jobs, siteUrl: cfg.siteUrl, hashtags: cfg.hashtags, maxHashtags: cfg.maxHashtags });
+            let body = buildPost({ id, jobs, siteUrl: cfg.siteUrl, hashtags: cfg.hashtags, maxHashtags: cfg.maxHashtags });
+            // Over LinkedIn's limit (very long titles): leave the last jobs for the next post, down to minJobs.
+            while (body.length > MAX_CHARS && jobs.length > cfg.minJobs) {
+                jobs = jobs.slice(0, -1);
+                body = buildPost({ id, jobs, siteUrl: cfg.siteUrl, hashtags: cfg.hashtags, maxHashtags: cfg.maxHashtags });
+            }
             await store.query('UPDATE posts SET body = $2 WHERE id = $1', [id, body]);
             for (const [i, j] of jobs.entries()) {
                 await store.query('INSERT INTO post_jobs (post_id, source, job_id, position) VALUES ($1, $2, $3, $4)',
