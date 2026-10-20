@@ -31,6 +31,33 @@
   header p { margin: 0; color: var(--muted); }
   header .brand { display: flex; align-items: center; gap: 12px; }
   header .brand img { width: 40px; height: 40px; flex: none; }
+  /* Refresh: a big button by the title, a banner under it, and a floating one once the header scrolls away. */
+  header { display: grid; grid-template-columns: 1fr auto; gap: 0 16px; align-items: center; }
+  header > :not(.refresh) { grid-column: 1; }
+  header .refresh { grid-column: 2; grid-row: 1 / span 2; }
+  .refresh {
+    display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 18px; border-radius: 10px;
+    border: 1px solid var(--accent); background: var(--accent); color: var(--on-accent);
+    font: inherit; font-weight: 600; cursor: pointer; white-space: nowrap;
+  }
+  .refresh:hover { filter: brightness(1.08); }
+  .refresh:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .refresh .icon { display: inline-block; font-size: 18px; line-height: 1; }
+  .refresh.spin .icon { animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .fresh {
+    margin: 16px 0 0; padding: 10px 14px; border-radius: 10px; background: var(--accent-soft); color: var(--accent);
+    font-size: 14px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  }
+  .fresh button { border: 0; background: none; color: inherit; font: inherit; font-weight: 650; text-decoration: underline; cursor: pointer; padding: 0; }
+  .refresh.floating {
+    position: fixed; right: 16px; bottom: 16px; z-index: 10; border-radius: 999px; box-shadow: 0 4px 16px rgb(0 0 0 / .18);
+  }
+  .refresh.floating[hidden] { display: none; }
+  @media (max-width: 560px) {
+    header { grid-template-columns: 1fr; }
+    header .refresh { grid-column: 1; grid-row: auto; justify-self: start; margin-top: 12px; }
+  }
 
   .controls { margin: 24px 0 8px; display: grid; gap: 12px; }
   .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
@@ -119,7 +146,10 @@
   <header>
     <div class="brand"><img src="logo.svg" alt=""><h1 id="title">India &amp; Remote Tech Jobs</h1></div>
     <p>Frontend, backend, full stack and mobile developer jobs in India and remote.</p>
+    <button class="refresh" id="refresh" type="button"><span class="icon" aria-hidden="true">↻</span> Refresh jobs</button>
   </header>
+  <p class="fresh">🔔 New jobs are added every few hours. <button type="button" id="refresh2">Refresh</button> to see the latest.</p>
+  <button class="refresh floating" id="refresh3" type="button" hidden><span class="icon" aria-hidden="true">↻</span> Refresh</button>
 
   <div class="controls">
     <div class="row" id="categories" role="group" aria-label="Category"></div>
@@ -442,6 +472,15 @@ function readUrl() {
 }
 
 let typing;
+// Refresh reloads the page; the filters are in the URL (sync), so they stay.
+function refresh() {
+  for (const id of ['refresh', 'refresh3']) $(id).classList.add('spin');
+  location.reload();
+}
+for (const id of ['refresh', 'refresh2', 'refresh3']) $(id).onclick = refresh;
+// The floating Refresh shows once the header's button has scrolled out of view.
+new IntersectionObserver(([e]) => { $('refresh3').hidden = e.isIntersecting; }).observe($('refresh'));
+
 $('q').addEventListener('input', (e) => {
   clearTimeout(typing);
   // Picking a company from the suggestions filters by that company instead of searching for its name.
