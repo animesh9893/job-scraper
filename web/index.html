@@ -123,6 +123,11 @@
   .salaries td { padding: 4px 0; border-top: 1px solid var(--border); vertical-align: top; }
   .salaries td + td { text-align: right; padding-left: 12px; white-space: nowrap; }
   .salaries .mid { color: var(--muted); font-size: 12px; }
+  .salary-more {
+    margin-top: 6px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface);
+    color: var(--accent); font: inherit; font-size: 13px; cursor: pointer;
+  }
+  .salary-more:hover { border-color: var(--accent); }
   .salaries .src { color: var(--muted); font-size: 12px; margin-top: 4px; }
   .company-info { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin: 8px 0; }
   .company-info h2 { margin: 0 0 2px; font-size: 16px; display: flex; align-items: center; gap: 8px; }
@@ -372,12 +377,24 @@ const salariesOf = (slug) => {
   return SALARIES.get(slug);
 };
 
-/** The per-role table: typical (median) pay, with the 10th to 90th percentile under it. */
+/** The per-role table: typical (median) pay, with the 10th to 90th percentile under it. Long lists show
+ *  SALARY_ROWS rows and a button that expands or collapses the rest. */
+const SALARY_ROWS = 5;
 function salaryTable(rows) {
+  const trs = rows.map((r, i) => el('tr', { hidden: i >= SALARY_ROWS },
+    el('td', { textContent: r.title }),
+    el('td', {}, money(r.median, r.currency), el('div', { className: 'mid', textContent: range(r.min, r.max, r.currency) }))));
+  const more = `Show all ${rows.length} roles ▾`;
+  const toggle = rows.length > SALARY_ROWS && el('button', { className: 'salary-more', type: 'button', textContent: more,
+    ariaExpanded: 'false', onclick() {
+      const open = this.ariaExpanded !== 'true';
+      trs.forEach((tr, i) => { if (i >= SALARY_ROWS) tr.hidden = !open; });
+      this.ariaExpanded = String(open);
+      this.textContent = open ? 'Show fewer ▴' : more;
+    } });
   return el('div', { className: 'salaries' },
-    el('table', {}, el('tbody', {}, ...rows.map((r) => el('tr', {},
-      el('td', { textContent: r.title }),
-      el('td', {}, money(r.median, r.currency), el('div', { className: 'mid', textContent: range(r.min, r.max, r.currency) })))))),
+    el('table', {}, el('tbody', {}, ...trs)),
+    toggle,
     el('div', { className: 'src', textContent: 'Yearly total pay per Glassdoor: median, and the 10th to 90th percentile below it.' }));
 }
 
