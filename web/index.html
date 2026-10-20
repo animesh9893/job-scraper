@@ -112,10 +112,16 @@
     .job > div { grid-row: auto; }
     .when, .apply { grid-column: 1; justify-self: start; }
   }
+  .site-links { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 4px 16px; font-size: 13px; margin: 0 0 12px; }
+  .site-links a { color: var(--muted); text-decoration: none; }
+  .site-links a:hover { color: var(--accent); text-decoration: underline; }
+  .legal { margin-top: 8px; color: var(--muted); font-size: 12px; }
+  .legal a { color: var(--muted); }
 </style>
 </head>
 <body>
 <div class="wrap">
+  <nav class="site-links" aria-label="Site policies"><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="copyright.html">Copyright</a></nav>
   <header>
     <div class="brand"><img src="logo.svg" alt=""><h1 id="title">India &amp; Remote Tech Jobs</h1></div>
     <p>Frontend, backend, full stack and mobile developer jobs in India and remote.</p>
@@ -135,6 +141,7 @@
   <div class="more" id="more" hidden>Loading more jobs…</div>
 
   <footer id="footer"></footer>
+  <p class="legal">Job data comes from public LinkedIn and Glassdoor pages; not affiliated with either. <a href="terms.html">Terms</a> · <a href="privacy.html">Privacy</a> · <a href="copyright.html">Copyright &amp; takedown</a> · Report: <a href="mailto:animesh.shrivatri2002@gmail.com">animesh.shrivatri2002@gmail.com</a></p>
 </div>
 
 <script src="config.js"></script>
