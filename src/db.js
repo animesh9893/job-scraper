@@ -489,6 +489,7 @@ export async function openDb() {
                 `SELECT * FROM searches WHERE is_active AND interval_hours IS NOT NULL
                    AND (last_run_at IS NULL OR last_run_at < now() - make_interval(hours => interval_hours) + interval '30 minutes')
                  ${order}`);
+            // LIMIT NULL is no limit: config searchesPerRun: all.
             const { rows: rotating } = await pool.query(
                 `SELECT * FROM searches WHERE is_active AND interval_hours IS NULL ${order} LIMIT $1`, [limit]);
             return [...due, ...rotating];

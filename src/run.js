@@ -1,6 +1,6 @@
 // Entry point: run the next few searches from the Supabase table `searches`, save new jobs to the DB.
 // Usage: node src/run.js                     → premium searches that are due, plus the `searchesPerRun`
-//                                              rotating searches that ran longest ago
+//                                              rotating searches that ran longest ago (all of them if it's `all`)
 //        node src/run.js [search-name ...]   → just these searches
 //        node src/run.js all                 → every active search
 //        node src/run.js none                → no searches, only the steps after them (company IDs, salaries)
@@ -41,7 +41,7 @@ try {
 const all = only.length === 1 && only[0] === 'all';
 const none = only.length === 1 && only[0] === 'none';
 await store.syncPremiumSearches(config.premium);
-const rows = none ? [] : await store.pickSearches({ names: all ? [] : only, all, limit: config.searchesPerRun });
+const rows = none ? [] : await store.pickSearches({ names: all ? [] : only, all, limit: config.searchesPerRun === 'all' ? null : config.searchesPerRun });
 const missing = all || none ? [] : only.filter((name) => !rows.some((r) => r.name === name));
 if (missing.length || (rows.length === 0 && !none)) {
     const known = await store.allSearchNames();

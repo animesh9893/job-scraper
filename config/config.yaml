@@ -16,9 +16,10 @@ defaults:
 
 # Searches and categories live in Supabase (tables `searches` and `categories`).
 # Manage them with `node src/searches.js` (see README) or in Supabase's Table Editor.
-# Each scrape runs this many searches, the ones that ran longest ago first, so a limited
-# Apify budget rotates through all of them. `node src/run.js all` runs every active search.
-searchesPerRun: 2
+# Each scrape (every 2 hours) runs this many searches, the ones that ran longest ago first, so a limited
+# Apify budget rotates through all of them. A search costs about $0.04. `all` runs every active search
+# each time (about $1 a run, $12 a day); `node src/run.js all` does that once.
+searchesPerRun: 8
 
 # Premium companies (table `companies`, is_premium) are searched on LinkedIn by company ID in groups of
 # companiesPerSearch, as searches premium-1, premium-2, … that run every intervalHours on top of the rotation.
@@ -27,7 +28,7 @@ searchesPerRun: 2
 premium:
   keywords: software engineer
   location: India
-  intervalHours: 6
+  intervalHours: 2
   jobsPerSearch: 25
   companiesPerSearch: 10
   # Premium companies without a LinkedIn ID get it looked up from their LinkedIn page (learned from their
