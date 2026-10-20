@@ -28,16 +28,18 @@ test('post follows the template and passes the check', () => {
     });
     const lines = body.split('\n');
     assert.equal(lines[0], '🚀 𝗛𝗶𝗿𝗶𝗻𝗴 𝗮𝗹𝗲𝗿𝘁: 𝟯 𝗻𝗲𝘄 𝗼𝗽𝗲𝗻𝗶𝗻𝗴𝘀 𝗮𝘁 𝟯 𝗰𝗼𝗺𝗽𝗮𝗻𝗶𝗲𝘀');
-    assert.deepEqual(lines.slice(2, 10), [
+    assert.deepEqual(lines.slice(2, 11), [
         '1. 𝗖𝗼 𝟭: Engineer 1 · 𝘉𝘦𝘯𝘨𝘢𝘭𝘶𝘳𝘶',
         '💰 ~₹24L/yr on Glassdoor',
-        '🔗 https://www.linkedin.com/jobs/view/4123456789',
+        '🔗 https://jobs.example.com/job.html?id=j1',
         '',
         '2. 𝗖𝗼 𝟮: Engineer 2 · 𝘉𝘦𝘯𝘨𝘢𝘭𝘶𝘳𝘶 (𝘙𝘦𝘮𝘰𝘵𝘦)',
-        '🔗 https://www.linkedin.com/jobs/view/4123456790',
+        '🔗 https://jobs.example.com/job.html?id=j2',
         '',
         '3. 𝗖𝗼 𝟬: Engineer 3 · 𝘉𝘦𝘯𝘨𝘢𝘭𝘶𝘳𝘶',
+        '🔗 https://jobs.example.com/job.html?id=j3',
     ]);
+    assert.doesNotMatch(body, /linkedin\.com/);
     assert.match(plain(body), /🔥 In demand: React, C\+\+, TypeScript/);
     assert.match(body, /https:\/\/jobs\.example\.com\/alert\.html\?id=42$/m);
     assert.equal(lines.at(-1), '#hiring #react #cpp #typescript #bengalurujobs #remotejobs');
@@ -65,7 +67,9 @@ test('pay: the listing\'s own salary, else the Glassdoor median for the closest 
         ['Senior Software Engineer', 'Android Developer', 'Mobile Developer', 'Software Engineer']);
 });
 
-test('job links: short LinkedIn job pages, else the apply link', () => {
+test('job links: the job page on the site, else short LinkedIn job pages, else the apply link', () => {
+    assert.equal(jobLink({ job_id: '4123456789', url: 'https://in.linkedin.com/jobs/view/x-4123456789' }, 'https://jobs.example.com/'),
+        'https://jobs.example.com/job.html?id=4123456789');
     assert.equal(jobLink({ url: 'https://in.linkedin.com/jobs/view/sde-ii-at-acme-4123456789' }), 'https://www.linkedin.com/jobs/view/4123456789');
     assert.equal(jobLink({ url: 'https://boards.greenhouse.io/acme/jobs/1' }), 'https://boards.greenhouse.io/acme/jobs/1');
     assert.equal(jobLink({ url: null, apply_url: 'https://acme.com/careers/1' }), 'https://acme.com/careers/1');
@@ -86,7 +90,7 @@ test('check catches posts that drift from the template', () => {
     assert.deepEqual(checkPost(ok), []);
     assert.match(checkPost(ok.replace('Engineer 1', 'undefined')).join(), /undefined/);
     assert.match(checkPost(`${ok}\nhttps://evil.example`).join(), /after all the others/);
-    assert.match(checkPost(ok.replace('Engineer 1', 'Engineer 1 https://a.example https://b.example')).join(), /2 job links for 1 jobs/);
+    assert.match(checkPost(ok.replace('Engineer 1', 'Engineer 1 https://a.example https://b.example')).join(), /3 job links for 1 jobs/);
     assert.match(checkPost(ok + 'x'.repeat(3000)).join(), /characters/);
 });
 

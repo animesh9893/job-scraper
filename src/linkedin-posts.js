@@ -129,8 +129,12 @@ export function payFor(job, salaries = []) {
     return null;
 }
 
-/** The job's own page: a short linkedin.com/jobs/view/<id> link when it is a LinkedIn job, else its apply link. */
-export function jobLink({ url, apply_url: applyUrl }) {
+/**
+ * The link for a job in a post: its page on our site (/job.html?id=<job id>, with an "Apply on LinkedIn" button)
+ * when siteUrl is given, else a short linkedin.com/jobs/view/<id> link when it is a LinkedIn job, else its apply link.
+ */
+export function jobLink({ job_id: jobId, url, apply_url: applyUrl }, siteUrl) {
+    if (siteUrl && jobId) return `${siteUrl.replace(/\/$/, '')}/job.html?id=${encodeURIComponent(jobId)}`;
     const id = String(url ?? '').match(/linkedin\.com\/jobs\/view\/(?:[^/?#]*-)?(\d{6,})/)?.[1];
     if (id) return `https://www.linkedin.com/jobs/view/${id}`;
     return /^https?:\/\//.test(url ?? '') ? url : /^https?:\/\//.test(applyUrl ?? '') ? applyUrl : null;
@@ -138,7 +142,7 @@ export function jobLink({ url, apply_url: applyUrl }) {
 
 /**
  * The post text: a bold heading; for each job a numbered line (company in bold, place in italics), its pay when
- * known (job.pay, see payFor) and its link; the most named tech; a link to the post's /alert.html page; hashtags.
+ * known (job.pay, see payFor) and its link to the job's page on the site (see jobLink); the most named tech; a link to the post's /alert.html page; hashtags.
  * Job titles and hashtags stay plain so LinkedIn search finds them.
  */
 export function buildPost({ id, jobs, siteUrl, hashtags = [], maxHashtags = 10 }) {
@@ -151,7 +155,7 @@ export function buildPost({ id, jobs, siteUrl, hashtags = [], maxHashtags = 10 }
         ...jobs.flatMap((j, i) => [
             `${i + 1}. ${bold(j.company)}: ${j.title}${where(j) ? ` · ${italic(where(j))}` : ''}`,
             ...(j.pay ? [`💰 ${j.pay}`] : []),
-            ...(jobLink(j) ? [`🔗 ${jobLink(j)}`] : []),
+            ...(jobLink(j, siteUrl) ? [`🔗 ${jobLink(j, siteUrl)}`] : []),
             '',
         ]),
         ...(top.length ? [`🔥 ${bold('In demand:')} ${top.join(', ')}`, ''] : []),

@@ -6,8 +6,8 @@
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9664106331529294"
      crossorigin="anonymous"></script>
 <title>Hiring alert · India &amp; Remote Tech Jobs</title>
-<meta name="description" content="Openings at top companies from this hiring alert, linked to the original job posts.">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💼</text></svg>">
+<meta name="description" content="Openings at top companies from this hiring alert, each with its details and a link to apply on LinkedIn.">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
 <style>
   :root {
     --bg: #f7f7f5; --surface: #ffffff; --text: #1d1d1b; --muted: #6b6b66; --border: #e4e4df;
@@ -26,6 +26,8 @@
   .wrap { max-width: 880px; margin: 0 auto; padding: 32px 16px 64px; }
   header h1 { margin: 0 0 4px; font-size: 26px; letter-spacing: -0.02em; }
   header p { margin: 0; color: var(--muted); }
+  header .brand { display: flex; align-items: center; gap: 12px; }
+  header .brand img { width: 40px; height: 40px; flex: none; }
   header a, footer a { color: var(--accent); }
   ul.jobs { list-style: none; margin: 24px 0 0; padding: 0; display: grid; gap: 10px; }
   .job { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
@@ -48,11 +50,11 @@
 <body>
 <div class="wrap">
   <header>
-    <h1 id="title">Hiring alert</h1>
+    <a class="brand" href="./" style="color: inherit; text-decoration: none"><img src="logo.svg" alt="Home"><h1 id="title">Hiring alert</h1></a>
     <p id="sub">Loading…</p>
   </header>
   <ul class="jobs" id="list"></ul>
-  <footer>Each opening links to the original job post; apply there. <a href="./">See every job on the board</a>.</footer>
+  <footer>Open a job for its details and the link to apply on LinkedIn. <a href="./">See every job on the board</a>.</footer>
 </div>
 
 <script src="config.js"></script>
@@ -64,13 +66,13 @@ const el = (tag, props = {}, ...children) => {
   node.append(...children.filter(Boolean));
   return node;
 };
-const safeUrl = (u) => { try { const x = new URL(u); return /^https?:$/.test(x.protocol) ? x.href : null; } catch { return null; } };
 const LEVELS = { intern: 'Intern', junior: 'Junior', senior: 'Senior', lead: 'Lead', staff: 'Staff', principal: 'Principal' };
 
+// Each opening links to its page on the site (job.html), which has the button to apply on LinkedIn.
 function card(j) {
-  const url = safeUrl(j.url);
+  const url = j.id != null && `job.html?id=${encodeURIComponent(j.id)}`;
   return el('li', { className: 'job' },
-    el('h2', {}, url ? el('a', { href: url, target: '_blank', rel: 'noopener nofollow', textContent: j.title }) : j.title),
+    el('h2', {}, url ? el('a', { href: url, textContent: j.title }) : j.title),
     el('div', { className: 'meta', textContent: [j.company, j.location].filter(Boolean).join(' · ') }),
     el('div', { className: 'badges' },
       j.companyPremium && el('span', { className: 'badge top', textContent: 'Top company' }),
