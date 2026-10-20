@@ -214,8 +214,8 @@ first three tags on each job.
   index plus freshness.
 - `posts` and `post_jobs`: LinkedIn hiring-alert posts and their jobs. After each scrape,
   `src/linkedin-posts.js` splits the best new jobs between the people in `config.yaml` → `linkedin.people`
-  (each gets different jobs) and writes one post for each, then pings each person's n8n to email it for approval
-  and post it. Setup and the n8n workflow: [n8n/README.md](n8n/README.md).
+  (each gets different jobs) and writes one post for each, then pings each person's n8n to send it to them on
+  Telegram for approval and post it. Setup and the n8n workflow: [n8n/README.md](n8n/README.md).
 - `web/posts.html`: password page showing everyone's posts with a copy button. The password is checked in the
   browser only (`POSTS_PASSWORD_SHA256` in `web/config.js`); the posts are public data.
 - `web/api/post-status.mjs`: where n8n reports a post as posted or declined.
