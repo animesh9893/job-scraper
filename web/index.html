@@ -355,6 +355,7 @@ function jobCard(j) {
     j.workplace && el('span', { className: `badge ${j.workplace}`, textContent: j.workplace === 'remote' ? 'Remote' : 'Hybrid' }),
     j.seniority && j.seniority !== 'Not Applicable' && el('span', { className: 'badge', textContent: j.seniority }),
     j.employmentType && el('span', { className: 'badge', textContent: j.employmentType }),
+    ...(j.tags ?? []).slice(0, 3).map((t) => el('span', { className: 'badge', textContent: t })),
   ];
   return el('li', { className: 'job' },
     el('div', {},

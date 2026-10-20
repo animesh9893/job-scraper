@@ -23,6 +23,7 @@ export function loadConfig() {
         salaries: { actor: 'axlymxp/glassdoor-salary-scraper', companiesPerRun: 2, refreshDays: 14, location: 'India',
             locationType: 'country', roles: ['Software Engineer'], ...config.salaries },
         site: { title: 'Tech Jobs', maxAgeDays: 30, maxJobs: 1000, ...config.site },
+        linkedin: { siteUrl: '', jobsPerPost: 6, minJobs: 3, hashtags: [], people: [], ...config.linkedin },
     };
 }
 

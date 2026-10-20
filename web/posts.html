@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>LinkedIn posts</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📝</text></svg>">
+<style>
+  :root {
+    --bg: #f7f7f5; --surface: #ffffff; --text: #1d1d1b; --muted: #6b6b66; --border: #e4e4df;
+    --accent: #2f5bd3; --on-accent: #ffffff; --accent-soft: #e8eefc; --chip: #f0f0ec;
+    --good: #0f7b4f; --good-soft: #e3f4ec; --warn: #8a5a00; --warn-soft: #fbf0d9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141413; --surface: #1d1d1b; --text: #ecece8; --muted: #a0a09a; --border: #2e2e2b;
+      --accent: #8aa8ff; --on-accent: #10172b; --accent-soft: #1f2a48; --chip: #262624;
+      --good: #5fd3a0; --good-soft: #16352a; --warn: #e8b860; --warn-soft: #3a2e14;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { margin: 0 0 4px; font-size: 26px; letter-spacing: -0.02em; }
+  .sub { margin: 0 0 24px; color: var(--muted); }
+  form { display: flex; gap: 8px; max-width: 420px; }
+  input, button { font: inherit; border-radius: 10px; }
+  input { flex: 1; padding: 10px 14px; color: var(--text); background: var(--surface); border: 1px solid var(--border); }
+  button { padding: 8px 14px; border: 1px solid var(--accent); background: var(--accent); color: var(--on-accent); cursor: pointer; }
+  button.quiet { background: var(--surface); color: var(--accent); }
+  .error { color: #c0392b; font-size: 14px; }
+  .people { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+  .person h2 { margin: 0 0 8px; font-size: 18px; }
+  .post { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 10px; }
+  .head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 13px; color: var(--muted); }
+  .chip { font-size: 12px; padding: 2px 8px; border-radius: 6px; background: var(--chip); }
+  .chip.draft { background: var(--warn-soft); color: var(--warn); }
+  .chip.posted { background: var(--good-soft); color: var(--good); }
+  pre { margin: 0 0 10px; white-space: pre-wrap; word-break: break-word; font: inherit; font-size: 14px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 14px; }
+  .actions a { color: var(--accent); }
+  details { margin-top: 8px; }
+  summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+  .empty { color: var(--muted); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>LinkedIn posts</h1>
+  <p class="sub" id="sub">One hiring-alert post per person after each scrape, each with different jobs.</p>
+
+  <form id="login">
+    <input type="password" id="password" placeholder="Password" aria-label="Password" autocomplete="current-password" required>
+    <button type="submit">Open</button>
+  </form>
+  <p class="error" id="error" hidden>Wrong password.</p>
+
+  <div class="people" id="people" hidden></div>
+</div>
+
+<script src="config.js"></script>
+<script type="module">
+// The password is checked here in the browser only (SHA-256 in config.js). It keeps the page out of casual
+// view; the posts are public data that n8n also reads with the public key (view public_linkedin_posts).
+const $ = (id) => document.getElementById(id);
+const el = (tag, props = {}, ...children) => {
+  const node = Object.assign(document.createElement(tag), props);
+  node.append(...children.filter(Boolean));
+  return node;
+};
+const safeUrl = (u) => { try { const x = new URL(u); return /^https?:$/.test(x.protocol) ? x.href : null; } catch { return null; } };
+const sha256 = async (s) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))]
+  .map((b) => b.toString(16).padStart(2, '0')).join('');
+const PER_PERSON = 10;
+
+function postCard(p) {
+  const copy = el('button', { type: 'button', className: 'quiet', textContent: 'Copy text' });
+  copy.onclick = async () => {
+    await navigator.clipboard.writeText(p.body ?? '');
+    copy.textContent = 'Copied';
+    setTimeout(() => { copy.textContent = 'Copy text'; }, 1500);
+  };
+  const posted = safeUrl(p.linkedinUrl);
+  return el('article', { className: 'post' },
+    el('div', { className: 'head' },
+      el('span', { className: `chip ${p.status}`, textContent: p.status }),
+      `Post ${p.id} · ${p.jobs} jobs · ${new Date(p.createdAt).toLocaleString()}`),
+    el('pre', { textContent: p.body ?? '' }),
+    el('div', { className: 'actions' },
+      copy,
+      el('a', { href: `alert.html?id=${p.id}`, target: '_blank', textContent: 'Openings page' }),
+      posted && el('a', { href: posted, target: '_blank', rel: 'noopener', textContent: 'On LinkedIn' })));
+}
+
+async function show() {
+  $('login').hidden = true;
+  $('error').hidden = true;
+  $('people').hidden = false;
+  $('people').replaceChildren(el('p', { className: 'empty', textContent: 'Loading posts…' }));
+  try {
+    const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm');
+    const db = createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY, { auth: { persistSession: false } });
+    const { data, error } = await db.from('public_linkedin_posts').select('*').order('createdAt', { ascending: false }).limit(200);
+    if (error) throw error;
+    const byPerson = new Map();
+    for (const p of data) byPerson.set(p.person, [...(byPerson.get(p.person) ?? []), p]);
+    if (!byPerson.size) {
+      $('people').replaceChildren(el('p', { className: 'empty', textContent: 'No posts yet. They are written after the next scrape.' }));
+      return;
+    }
+    $('people').replaceChildren(...[...byPerson].sort(([a], [b]) => a.localeCompare(b)).map(([person, posts]) => {
+      const [latest, ...older] = posts.slice(0, PER_PERSON);
+      return el('section', { className: 'person' },
+        el('h2', { textContent: person.charAt(0).toUpperCase() + person.slice(1) }),
+        postCard(latest),
+        older.length > 0 && el('details', {}, el('summary', { textContent: `${older.length} earlier post${older.length === 1 ? '' : 's'}` }),
+          ...older.map(postCard)));
+    }));
+  } catch {
+    $('people').replaceChildren(el('p', { className: 'empty', textContent: 'Could not load posts. Please try again later.' }));
+  }
+}
+
+let unlocked = false;
+try { unlocked = sessionStorage.getItem('postsUnlocked') === window.POSTS_PASSWORD_SHA256; } catch {}
+if (unlocked) show();
+$('login').onsubmit = async (e) => {
+  e.preventDefault();
+  if ((await sha256($('password').value)) !== window.POSTS_PASSWORD_SHA256) { $('error').hidden = false; return; }
+  try { sessionStorage.setItem('postsUnlocked', window.POSTS_PASSWORD_SHA256); } catch {}
+  show();
+};
+</script>
+</body>
+</html>

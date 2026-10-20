@@ -201,6 +201,26 @@ Picks the `searchesPerRun` active searches with the oldest `last_run_at` (never-
 
 If one search fails, the others still run; the command then exits with code 1, so the workflow shows as failed.
 
+## Tags, company index and posts
+
+After each scrape, every new job gets keyword tags from its title and description (`src/tags.js`, no AI): a
+`role` (frontend, backend, mobile, data, ml, devops, …), a `level` (junior, mid, senior, lead, staff, …) and the
+`tags` it names (React, Go, AWS, …). To tag a new technology, add it to `STACK` in that file. The site shows the
+first three tags on each job.
+
+- `company_index` (view): a 0 to 100 score per company from its Glassdoor rating, premium status, jobs in the
+  last 7 days and best median pay. The weights are written next to the view in `src/db.js`.
+- `post_candidates` (view): jobs from the last 3 days not posted yet, at most 2 per company, scored by company
+  index plus freshness.
+- `posts` and `post_jobs`: LinkedIn hiring-alert posts and their jobs. After each scrape,
+  `src/linkedin-posts.js` splits the best new jobs between the people in `config.yaml` → `linkedin.people`
+  (each gets different jobs) and writes one post for each, then pings each person's n8n to email it for approval
+  and post it. Setup and the n8n workflow: [n8n/README.md](n8n/README.md).
+- `web/posts.html`: password page showing everyone's posts with a copy button. The password is checked in the
+  browser only (`POSTS_PASSWORD_SHA256` in `web/config.js`); the posts are public data.
+- `web/api/post-status.mjs`: where n8n reports a post as posted or declined.
+- `web/alert.html?id=<post id>`: the page a post links to, listing its openings.
+
 ## Tables
 
 - `jobs`: title, company, company_url, location, category, workplace, url, apply_url, posted_at, employment_type,
@@ -213,8 +233,9 @@ If one search fails, the others still run; the command then exits with code 1, s
 - `companies`: one row per employer, premium or not, with its LinkedIn ID, logo and salary fetch status.
 - `company_salaries`: Glassdoor pay per company and job title, yearly, in its currency and in USD.
 - `fx_rates`: USD value of each currency, refreshed daily when salaries are fetched.
+- `posts`, `post_jobs`: LinkedIn hiring-alert posts and the jobs in each.
 - Views for the site (the only things the public key can read): `public_jobs`, `public_categories`,
-  `public_job_counts`, `public_companies`, `public_company_salaries`.
+  `public_job_counts`, `public_companies`, `public_company_salaries`, `public_alert_jobs`, `public_linkedin_posts`.
 
 ## Workflows
 

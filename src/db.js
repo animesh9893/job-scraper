@@ -33,6 +33,11 @@ ALTER TABLE jobs ADD COLUMN IF NOT EXISTS category TEXT;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS workplace TEXT;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS company_slug TEXT;   -- companies.slug, set by link_companies()
 CREATE INDEX IF NOT EXISTS jobs_company_slug ON jobs(company_slug);
+-- Keyword tags from the title and description (src/tags.js), set after each scrape.
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS role TEXT;          -- frontend | backend | mobile | data | ml | devops | …
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS level TEXT;         -- intern | junior | mid | senior | lead | staff | principal
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS tags TEXT[];        -- tech named, e.g. {React,TypeScript}
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS tagged_at TIMESTAMPTZ;
 UPDATE jobs SET category = split_part(search_name, '-', 1)
 WHERE category IS NULL AND split_part(search_name, '-', 1) IN ('frontend', 'backend', 'fullstack', 'mobile');
 
@@ -197,7 +202,7 @@ CREATE OR REPLACE VIEW public_jobs AS
     SELECT j.job_id AS id, j.title, j.company, j.location, j.category, j.workplace, j.url,
            j.posted_at AS "postedAt", j.employment_type AS "employmentType", j.seniority,
            j.first_seen_at AS "firstSeenAt", j.company_slug AS "companySlug",
-           COALESCE(c.is_premium, false) AS "companyPremium"
+           COALESCE(c.is_premium, false) AS "companyPremium", j.role, j.level, j.tags
     FROM jobs j LEFT JOIN companies c ON c.slug = j.company_slug
     WHERE j.status <> 'skipped' AND j.first_seen_at > now() - interval '30 days';
 CREATE OR REPLACE VIEW public_categories AS
@@ -227,13 +232,92 @@ CREATE OR REPLACE VIEW public_company_salaries AS
            min_annual AS min, median_annual AS median, max_annual AS max,
            min_usd AS "minUsd", median_usd AS "medianUsd", max_usd AS "maxUsd", fetched_at AS "fetchedAt"
     FROM company_salaries;
+
+-- Company index, 0 to 100, for ranking companies in LinkedIn posts and on the site:
+--   Glassdoor rating            up to 30 (rating / 5; 12 when unknown, a middling rating)
+--   premium (MNC) company       20
+--   jobs first seen in 7 days   up to 25 (10 or more is full marks)
+--   best median pay             up to 25 (its rank among companies with salaries, in USD)
+CREATE OR REPLACE VIEW company_index AS
+    SELECT c.slug, c.name, c.is_premium, c.glassdoor_rating, COALESCE(w.n, 0)::int AS jobs_week, pay.usd AS pay_usd,
+           round((COALESCE(c.glassdoor_rating / 5 * 30, 12)
+                 + CASE WHEN c.is_premium THEN 20 ELSE 0 END
+                 + LEAST(COALESCE(w.n, 0), 10) * 2.5
+                 + COALESCE(CASE WHEN pay.usd IS NOT NULL THEN percent_rank() OVER (PARTITION BY pay.usd IS NOT NULL ORDER BY pay.usd) END, 0) * 25)::numeric,
+                 1) AS score
+    FROM companies c
+    LEFT JOIN LATERAL (SELECT COUNT(*) AS n FROM jobs j
+                       WHERE j.company_slug = c.slug AND j.status <> 'skipped' AND j.first_seen_at > now() - interval '7 days') w ON true
+    LEFT JOIN LATERAL (SELECT MAX(s.median_usd) AS usd FROM company_salaries s WHERE s.company_slug = c.slug) pay ON true;
+
+-- LinkedIn "Hiring alert" posts, one per person (config linkedin.people) per scrape, written by
+-- src/linkedin-posts.js, and the jobs in each. A job goes into one post only, ever. Each person's n8n reads its
+-- post from public_linkedin_posts and reports back through web/api/post-status.mjs (see n8n/README.md).
+CREATE TABLE IF NOT EXISTS posts (
+    id           BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    person       TEXT NOT NULL,                    -- linkedin.people[].id, e.g. animesh
+    status       TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'posted', 'skipped')),
+    body         TEXT,                             -- the post text
+    linkedin_url TEXT,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    posted_at    TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS posts_person ON posts (person, created_at DESC);
+CREATE TABLE IF NOT EXISTS post_jobs (
+    post_id  BIGINT NOT NULL REFERENCES posts (id) ON DELETE CASCADE,
+    source   TEXT NOT NULL,
+    job_id   TEXT NOT NULL,
+    position INTEGER NOT NULL DEFAULT 0,           -- order in the post
+    PRIMARY KEY (post_id, source, job_id)
+);
+ALTER TABLE posts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE post_jobs ENABLE ROW LEVEL SECURITY;
+
+-- Jobs worth a post: first seen in the last 3 days, in no post yet, at most 2 per company, best first.
+-- Job score = company index (0 to 100) + up to 20 for freshness + 5 when it names its tech stack.
+CREATE OR REPLACE VIEW post_candidates AS
+    SELECT * FROM (
+        SELECT j.source, j.job_id, j.title, j.company, j.company_slug, j.location, j.workplace, j.url,
+               j.role, j.level, j.tags, j.first_seen_at, ci.score AS company_score, ci.is_premium,
+               round((COALESCE(ci.score, 12)
+                     + GREATEST(0, 20 - EXTRACT(EPOCH FROM now() - j.first_seen_at) / 3600 / 72 * 20)
+                     + CASE WHEN cardinality(j.tags) > 0 THEN 5 ELSE 0 END)::numeric, 1) AS score,
+               row_number() OVER (PARTITION BY COALESCE(j.company_slug, j.company)
+                                  ORDER BY j.first_seen_at DESC, j.job_id) AS nth_at_company
+        FROM jobs j
+        LEFT JOIN company_index ci ON ci.slug = j.company_slug
+        WHERE j.status <> 'skipped' AND j.first_seen_at > now() - interval '3 days'
+          AND NOT EXISTS (SELECT 1 FROM post_jobs pj WHERE pj.source = j.source AND pj.job_id = j.job_id)
+    ) t
+    WHERE nth_at_company <= 2
+    ORDER BY score DESC, first_seen_at DESC;
+
+-- Posts for the private posts page (web/posts.html) and for n8n. Job posts are public data, so the site's
+-- public key may read them; the page's password only keeps the page out of casual view.
+CREATE OR REPLACE VIEW public_linkedin_posts AS
+    SELECT p.id, p.person, p.status, p.body, p.linkedin_url AS "linkedinUrl", p.created_at AS "createdAt",
+           p.posted_at AS "postedAt", (SELECT COUNT(*)::int FROM post_jobs pj WHERE pj.post_id = p.id) AS jobs
+    FROM posts p;
+
+-- The site's hiring-alert page (web/alert.html?id=<post id>): the jobs of one post, in post order.
+CREATE OR REPLACE VIEW public_alert_jobs AS
+    SELECT p.id AS "alertId", p.created_at AS "alertAt", pj.position, j.job_id AS id, j.title, j.company, j.location,
+           j.workplace, j.url, j.company_slug AS "companySlug", COALESCE(c.is_premium, false) AS "companyPremium",
+           j.role, j.level, j.tags, j.first_seen_at AS "firstSeenAt"
+    FROM posts p
+    JOIN post_jobs pj ON pj.post_id = p.id
+    JOIN jobs j ON j.source = pj.source AND j.job_id = pj.job_id
+    LEFT JOIN companies c ON c.slug = j.company_slug
+    WHERE p.status <> 'skipped';
+
 DO $$ BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
         REVOKE ALL ON jobs, categories, searches, companies, company_salaries, fx_rates FROM anon, authenticated;
-        REVOKE ALL ON public_jobs, public_categories, public_job_counts, public_companies, public_company_salaries
-            FROM anon, authenticated;
-        GRANT SELECT ON public_jobs, public_categories, public_job_counts, public_companies, public_company_salaries
-            TO anon, authenticated;
+        REVOKE ALL ON posts, post_jobs, company_index, post_candidates FROM anon, authenticated;
+        REVOKE ALL ON public_jobs, public_categories, public_job_counts, public_companies, public_company_salaries,
+                      public_alert_jobs, public_linkedin_posts FROM anon, authenticated;
+        GRANT SELECT ON public_jobs, public_categories, public_job_counts, public_companies, public_company_salaries,
+                        public_alert_jobs, public_linkedin_posts TO anon, authenticated;
     END IF;
 END $$;
 
@@ -373,6 +457,22 @@ export async function openDb() {
             const { rows: rotating } = await pool.query(
                 `SELECT * FROM searches WHERE is_active AND interval_hours IS NULL ${order} LIMIT $1`, [limit]);
             return [...due, ...rotating];
+        },
+
+        /** Jobs not tagged yet (src/tags.js), newest first. */
+        async untaggedJobs(limit) {
+            return (await pool.query(
+                `SELECT source, job_id, title, description, category FROM jobs WHERE tagged_at IS NULL
+                 ORDER BY first_seen_at DESC LIMIT $1`, [limit])).rows;
+        },
+
+        /** Saves { source, job_id, role, level, tags } for each job. */
+        async saveTags(rows) {
+            if (!rows.length) return;
+            await pool.query(
+                `UPDATE jobs j SET role = t.role, level = t.level, tags = t.tags, tagged_at = now()
+                 FROM jsonb_to_recordset($1::jsonb) AS t(source TEXT, job_id TEXT, role TEXT, level TEXT, tags TEXT[])
+                 WHERE j.source = t.source AND j.job_id = t.job_id`, [JSON.stringify(rows)]);
         },
 
         /** Links jobs to companies, adding companies seen for the first time. Returns how many jobs it linked. */
