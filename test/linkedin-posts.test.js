@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { splitJobs, buildPost, checkPost, plain, bold, italic, payFor, payRoles, jobLink, postHashtags } from '../src/linkedin-posts.js';
-import { postImageSvg, renderPostImage } from '../src/post-image.js';
+import { postImageSvg, renderPostImage, pickCompanies, loadLogos, MAX_LOGOS } from '../src/post-image.js';
 
 const people = [{ id: 'animesh' }, { id: 'sachin' }];
 const job = (n, extra = {}) => ({ job_id: `j${n}`, title: `Engineer ${n}`, company: `Co ${n % 3}`, location: 'Bengaluru, Karnataka, India', tags: [], ...extra });
@@ -110,13 +110,35 @@ test('hashtags: configured ones, then roles, tech and cities, without repeats, u
     assert.equal(postHashtags(jobs, ['hiring'], 4).length, 4);
 });
 
-test('picture: lists each job, escapes text and renders a PNG', () => {
-    const jobs = [{ company: 'AT&T <Labs>', title: 'Engineer', place: 'Pune', pay: '₹20L' }, { company: 'Co', title: 'Dev' }];
-    const svg = postImageSvg({ jobs, siteUrl: 'https://jobs.example.com/', date: new Date('2026-10-20T10:00:00Z') });
+test('picture: the post\'s companies are always on it, premium ones first, then the board\'s best', () => {
+    const premium = Array.from({ length: 25 }, (_, i) => ({ slug: `p${i}`, name: `Premium ${i}`, is_premium: true }));
+    const post = [{ slug: 'p3', name: 'Premium 3', is_premium: true }, { slug: 'small', name: 'Small Co', is_premium: false }];
+    const picked = pickCompanies(post, premium);
+    assert.equal(picked.length, MAX_LOGOS);
+    assert.deepEqual(picked.slice(0, 3).map((c) => c.slug), ['p3', 'p0', 'p1']);
+    assert.deepEqual(picked.at(-1), { slug: 'small', name: 'Small Co', is_premium: false, isNew: true });
+    assert.equal(picked.filter((c) => c.slug === 'p3').length, 1);
+    assert.deepEqual(picked.filter((c) => c.isNew).map((c) => c.slug), ['p3', 'small']);
+});
+
+test('picture: logos fall back to the site icon, then to initials, and text is escaped', async () => {
+    const asked = [];
+    const fetchLogo = async (url) => (asked.push(url), url.includes('good') ? 'data:image/png;base64,AAAA' : null);
+    const [a, b, c] = await loadLogos([
+        { name: 'A', logo_url: 'https://good/a' }, { name: 'B', logo_url: 'https://bad/b', domain: 'good.com' }, { name: 'AT&T <Labs>' },
+    ], fetchLogo);
+    assert.equal(a.logo, 'data:image/png;base64,AAAA');
+    assert.equal(b.logo, 'data:image/png;base64,AAAA');
+    assert.equal(c.logo, null);
+    assert.match(asked[2], /s2\/favicons\?domain=good\.com/);
+    const svg = postImageSvg({ companies: [a, b, { ...c, isNew: true }], jobs: 2, companiesInPost: 1, siteUrl: 'https://jobs.example.com/',
+        date: new Date('2026-10-20T10:00:00Z') });
     assert.match(svg, /AT&amp;T &lt;Labs&gt;/);
+    assert.match(svg, />A&lt;</);
+    assert.match(svg, />NEW</);
     assert.match(svg, />2 new openings</);
     assert.match(svg, /20 Oct 2026/);
     assert.match(svg, /jobs\.example\.com</);
-    const png = renderPostImage({ jobs, siteUrl: 'https://jobs.example.com' });
+    const png = renderPostImage({ companies: [c], jobs: 1, companiesInPost: 1, siteUrl: 'https://jobs.example.com' });
     assert.deepEqual([...png.subarray(1, 4)], [...Buffer.from('PNG')]);
 });

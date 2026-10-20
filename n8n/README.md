@@ -19,8 +19,9 @@ Each job goes into one post only, ever, so the two of you never post the same op
 the same company's same title (ignoring case and punctuation) was in a post in the last 30 days, or is listed
 twice in the same scrape: LinkedIn often lists one opening under new ids or once per city.
 
-Each post gets a picture: a 1200×1200 card listing its jobs (company, pay, title, place) and the site, drawn by
-`src/post-image.js` when the post is written and stored in `posts.image`.
+Each post gets a picture: a 1200×1200 wall of up to 20 company logos, the post's companies (marked NEW) and the
+board's top premium companies, with the opening count and the site. It's drawn by `src/post-image.js` when the
+post is written (logos from LinkedIn, else the company site's icon, else initials) and stored in `posts.image`.
 
 ## Setup for each person
 
