@@ -210,8 +210,8 @@ first three tags on each job.
 
 - `company_index` (view): a 0 to 100 score per company from its Glassdoor rating, premium status, jobs in the
   last 7 days and best median pay. The weights are written next to the view in `src/db.js`.
-- `post_candidates` (view): jobs from the last 3 days not posted yet, at most 2 per company, scored by company
-  index plus freshness.
+- `post_candidates` (view): jobs from the last 3 days not posted yet, at most 2 per company and one per title (also
+  skipping titles a company had in a post in the last 30 days), scored by company index plus freshness.
 - `posts` and `post_jobs`: LinkedIn hiring-alert posts and their jobs. After each scrape,
   `src/linkedin-posts.js` splits the best new jobs between the people in `config.yaml` → `linkedin.people`
   (each gets different jobs) and writes one post for each, then pings each person's n8n to send it to them on

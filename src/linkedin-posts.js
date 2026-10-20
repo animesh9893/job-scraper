@@ -53,6 +53,33 @@ function where({ location, workplace }) {
 // "Node.js" → "nodejs", "C++" → "cpp", "C#" → "csharp", "Machine Learning" → "machinelearning".
 const hashtag = (tag) => tag.toLowerCase().replace(/\+\+/g, 'pp').replace(/#/g, 'sharp').replace(/[^a-z0-9]/g, '');
 
+// Hashtags people follow for each role (src/tags.js ROLES).
+const ROLE_TAGS = {
+    backend: 'backenddeveloper', frontend: 'frontenddeveloper', fullstack: 'fullstackdeveloper', mobile: 'mobiledevelopment',
+    data: 'dataengineering', ml: 'machinelearning', devops: 'devops', security: 'cybersecurity', qa: 'softwaretesting',
+    design: 'uxdesign', product: 'productmanagement', manager: 'engineeringmanagement',
+};
+
+// The values most jobs share, most common first.
+function mostCommon(values, n) {
+    const counts = new Map();
+    for (const v of values.filter(Boolean)) counts.set(v, (counts.get(v) ?? 0) + 1);
+    return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, n).map(([v]) => v);
+}
+
+/** Hashtags for a post: the configured ones, then its jobs' roles, top tech and cities, up to max. */
+export function postHashtags(jobs, hashtags = [], max = 10) {
+    const remote = jobs.some((j) => j.workplace === 'remote');
+    const cities = jobs.filter((j) => j.workplace !== 'remote').map((j) => where(j));
+    return [...new Set([
+        ...hashtags,
+        ...mostCommon(jobs.map((j) => ROLE_TAGS[j.role]), 2),
+        ...mostCommon(jobs.flatMap((j) => j.tags ?? []), 3).map(hashtag),
+        ...mostCommon(cities, 2).map((c) => `${hashtag(c)}jobs`),
+        ...(remote ? ['remotejobs'] : []),
+    ].map(hashtag).filter(Boolean))].slice(0, max);
+}
+
 // The Glassdoor roles (config salaries.roles) that fit a job, best first. Interns get none: a full-time median
 // would mislead. Managers, product, design and data roles don't fall back to software engineer pay.
 export function payRoles({ title, role, level }) {
@@ -114,12 +141,10 @@ export function jobLink({ url, apply_url: applyUrl }) {
  * known (job.pay, see payFor) and its link; the most named tech; a link to the post's /alert.html page; hashtags.
  * Job titles and hashtags stay plain so LinkedIn search finds them.
  */
-export function buildPost({ id, jobs, siteUrl, hashtags = [] }) {
+export function buildPost({ id, jobs, siteUrl, hashtags = [], maxHashtags = 10 }) {
     const companies = new Set(jobs.map((j) => j.company)).size;
-    const counts = new Map();
-    for (const t of jobs.flatMap((j) => j.tags ?? [])) counts.set(t, (counts.get(t) ?? 0) + 1);
-    const top = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 3).map(([t]) => t);
-    const tags = [...new Set([...hashtags, ...top.map(hashtag)].filter(Boolean))].slice(0, 5);
+    const top = mostCommon(jobs.flatMap((j) => j.tags ?? []), 3);
+    const tags = postHashtags(jobs, hashtags, maxHashtags);
     return [
         `🚀 ${bold(`Hiring alert: ${jobs.length} new opening${jobs.length === 1 ? '' : 's'} at ${companies} compan${companies === 1 ? 'y' : 'ies'}`)}`,
         '',
@@ -156,7 +181,7 @@ export function checkPost(body) {
     if (alert.length !== 1 || alert[0] !== links.at(-1)) problems.push('needs one link to /alert.html?id=…, after all the others');
     if (links.length - 1 > jobs) problems.push(`${links.length - 1} job links for ${jobs} jobs`);
     const tags = (lines.at(-1) ?? '').match(/#\w+/g) ?? [];
-    if (tags.length < 1 || tags.length > 5) problems.push(`${tags.length} hashtags on the last line, expected 1 to 5`);
+    if (tags.length < 1 || tags.length > 12) problems.push(`${tags.length} hashtags on the last line, expected 1 to 12`);
     if (/\b(undefined|null|NaN)\b/.test(text)) problems.push('contains "undefined", "null" or "NaN"');
     return problems;
 }
@@ -169,6 +194,30 @@ async function ping(url, token, payload) {
         signal: AbortSignal.timeout(20000),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
+}
+
+// Draws the picture of every draft post that has none yet (new posts, and drafts from before pictures).
+async function drawImages(store, siteUrl) {
+    const { renderPostImage } = await import('./post-image.js');
+    const { rows } = await store.query(
+        `SELECT p.id, p.created_at, pj.position, j.title, j.company, j.company_slug, j.location, j.workplace,
+                j.role, j.level, j.salary
+         FROM posts p
+         JOIN post_jobs pj ON pj.post_id = p.id
+         JOIN jobs j ON j.source = pj.source AND j.job_id = pj.job_id
+         WHERE p.status = 'draft' AND p.image IS NULL
+         ORDER BY p.id, pj.position`);
+    if (!rows.length) return;
+    const { rows: salaries } = await store.query(
+        `SELECT company_slug, query, currency, median_annual::float AS median FROM company_salaries
+         WHERE company_slug = ANY($1) ORDER BY median_annual DESC`, [[...new Set(rows.map((j) => j.company_slug))]]);
+    for (const id of new Set(rows.map((r) => r.id))) {
+        const mine = rows.filter((r) => r.id === id);
+        const jobs = mine.map((j) => ({ company: j.company, title: j.title, place: where(j), pay: payFor(j, salaries) }));
+        const png = renderPostImage({ jobs, siteUrl, date: mine[0].created_at });
+        await store.query('UPDATE posts SET image = $2 WHERE id = $1', [id, png]);
+        console.log(`  🖼 post ${id}: picture drawn (${Math.round(png.length / 1024)} KB)`);
+    }
 }
 
 async function main() {
@@ -195,7 +244,7 @@ async function main() {
                 continue;
             }
             const { rows: [{ id }] } = await store.query('INSERT INTO posts (person) VALUES ($1) RETURNING id', [person.id]);
-            const body = buildPost({ id, jobs, siteUrl: cfg.siteUrl, hashtags: cfg.hashtags });
+            const body = buildPost({ id, jobs, siteUrl: cfg.siteUrl, hashtags: cfg.hashtags, maxHashtags: cfg.maxHashtags });
             await store.query('UPDATE posts SET body = $2 WHERE id = $1', [id, body]);
             for (const [i, j] of jobs.entries()) {
                 await store.query('INSERT INTO post_jobs (post_id, source, job_id, position) VALUES ($1, $2, $3, $4)',
@@ -206,6 +255,7 @@ async function main() {
             made.push({ person, id, jobs: jobs.length });
             console.log(`  ✔ ${person.id}: post ${id} with ${jobs.length} job(s)`);
         }
+        await drawImages(store, cfg.siteUrl);
     } finally {
         await store.close();
     }

@@ -263,6 +263,7 @@ CREATE TABLE IF NOT EXISTS posts (
     posted_at    TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS posts_person ON posts (person, created_at DESC);
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS image BYTEA;   -- the post's picture, a PNG (src/post-image.js)
 CREATE TABLE IF NOT EXISTS post_jobs (
     post_id  BIGINT NOT NULL REFERENCES posts (id) ON DELETE CASCADE,
     source   TEXT NOT NULL,
@@ -274,22 +275,40 @@ ALTER TABLE posts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE post_jobs ENABLE ROW LEVEL SECURITY;
 
 -- Jobs worth a post: first seen in the last 3 days, in no post yet, at most 2 per company, best first.
+-- A job is left out when the same company's same title (ignoring case and punctuation) is newer in this list
+-- or was already in a post in the last 30 days: LinkedIn often lists one opening several times, under new ids
+-- or once per city.
 -- Job score = company index (0 to 100) + up to 20 for freshness + 5 when it names its tech stack.
 CREATE OR REPLACE VIEW post_candidates AS
     SELECT * FROM (
+    SELECT source, job_id, title, company, company_slug, location, workplace, url, role, level, tags, first_seen_at,
+           company_score, is_premium, score,
+           row_number() OVER (PARTITION BY company_key ORDER BY first_seen_at DESC, job_id) AS nth_at_company,
+           salary, apply_url
+    FROM (
         SELECT j.source, j.job_id, j.title, j.company, j.company_slug, j.location, j.workplace, j.url,
                j.role, j.level, j.tags, j.first_seen_at, ci.score AS company_score, ci.is_premium,
                round((COALESCE(ci.score, 12)
                      + GREATEST(0, 20 - EXTRACT(EPOCH FROM now() - j.first_seen_at) / 3600 / 72 * 20)
                      + CASE WHEN cardinality(j.tags) > 0 THEN 5 ELSE 0 END)::numeric, 1) AS score,
-               row_number() OVER (PARTITION BY COALESCE(j.company_slug, j.company)
-                                  ORDER BY j.first_seen_at DESC, j.job_id) AS nth_at_company,
+               COALESCE(j.company_slug, j.company) AS company_key,
+               row_number() OVER (PARTITION BY lower(COALESCE(j.company_slug, j.company)),
+                                               regexp_replace(lower(j.title), '[^a-z0-9]+', '', 'g')
+                                  ORDER BY j.first_seen_at DESC, j.job_id) AS nth_of_title,
                j.salary, j.apply_url
         FROM jobs j
         LEFT JOIN company_index ci ON ci.slug = j.company_slug
         WHERE j.status <> 'skipped' AND j.first_seen_at > now() - interval '3 days'
           AND NOT EXISTS (SELECT 1 FROM post_jobs pj WHERE pj.source = j.source AND pj.job_id = j.job_id)
+          AND NOT EXISTS (
+              SELECT 1 FROM post_jobs pj
+              JOIN posts p ON p.id = pj.post_id AND p.created_at > now() - interval '30 days'
+              JOIN jobs pjj ON pjj.source = pj.source AND pjj.job_id = pj.job_id
+              WHERE lower(COALESCE(pjj.company_slug, pjj.company)) = lower(COALESCE(j.company_slug, j.company))
+                AND regexp_replace(lower(pjj.title), '[^a-z0-9]+', '', 'g') = regexp_replace(lower(j.title), '[^a-z0-9]+', '', 'g'))
     ) t
+    WHERE nth_of_title = 1
+    ) u
     WHERE nth_at_company <= 2
     ORDER BY score DESC, first_seen_at DESC;
 
@@ -299,6 +318,10 @@ CREATE OR REPLACE VIEW public_linkedin_posts AS
     SELECT p.id, p.person, p.status, p.body, p.linkedin_url AS "linkedinUrl", p.created_at AS "createdAt",
            p.posted_at AS "postedAt", (SELECT COUNT(*)::int FROM post_jobs pj WHERE pj.post_id = p.id) AS jobs
     FROM posts p;
+
+-- Each post's picture as base64 PNG, for n8n (node "Picture to file" turns it back into an image).
+CREATE OR REPLACE VIEW public_post_images AS
+    SELECT id, replace(encode(image, 'base64'), E'\n', '') AS image FROM posts WHERE image IS NOT NULL;
 
 -- The site's hiring-alert page (web/alert.html?id=<post id>): the jobs of one post, in post order.
 CREATE OR REPLACE VIEW public_alert_jobs AS
@@ -316,9 +339,9 @@ DO $$ BEGIN
         REVOKE ALL ON jobs, categories, searches, companies, company_salaries, fx_rates FROM anon, authenticated;
         REVOKE ALL ON posts, post_jobs, company_index, post_candidates FROM anon, authenticated;
         REVOKE ALL ON public_jobs, public_categories, public_job_counts, public_companies, public_company_salaries,
-                      public_alert_jobs, public_linkedin_posts FROM anon, authenticated;
+                      public_alert_jobs, public_linkedin_posts, public_post_images FROM anon, authenticated;
         GRANT SELECT ON public_jobs, public_categories, public_job_counts, public_companies, public_company_salaries,
-                        public_alert_jobs, public_linkedin_posts TO anon, authenticated;
+                        public_alert_jobs, public_linkedin_posts, public_post_images TO anon, authenticated;
     END IF;
 END $$;
 

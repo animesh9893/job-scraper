@@ -16,6 +16,7 @@
     "node": ">=20"
   },
   "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "apify-client": "^2.25.0",
     "pg": "^8.23.1",
     "yaml": "^2.9.1"

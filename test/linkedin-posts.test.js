@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { splitJobs, buildPost, checkPost, plain, bold, italic, payFor, payRoles, jobLink } from '../src/linkedin-posts.js';
+import { splitJobs, buildPost, checkPost, plain, bold, italic, payFor, payRoles, jobLink, postHashtags } from '../src/linkedin-posts.js';
+import { postImageSvg, renderPostImage } from '../src/post-image.js';
 
 const people = [{ id: 'animesh' }, { id: 'sachin' }];
 const job = (n, extra = {}) => ({ job_id: `j${n}`, title: `Engineer ${n}`, company: `Co ${n % 3}`, location: 'Bengaluru, Karnataka, India', tags: [], ...extra });
@@ -39,7 +40,7 @@ test('post follows the template and passes the check', () => {
     ]);
     assert.match(plain(body), /🔥 In demand: React, C\+\+, TypeScript/);
     assert.match(body, /https:\/\/jobs\.example\.com\/alert\.html\?id=42$/m);
-    assert.equal(lines.at(-1), '#hiring #react #cpp #typescript');
+    assert.equal(lines.at(-1), '#hiring #react #cpp #typescript #bengalurujobs #remotejobs');
     assert.deepEqual(checkPost(body), []);
 });
 
@@ -96,4 +97,26 @@ test('the n8n workflow runs the same template check', async () => {
     assert.ok(code.includes(checkPost.toString()), 'copy checkPost() from src/linkedin-posts.js into the workflow');
     assert.ok(code.includes(plain.toString()), 'copy plain() from src/linkedin-posts.js into the workflow');
     assert.equal(code.split('function plain(').length, 2, 'plain() is in the workflow once');
+});
+
+test('hashtags: configured ones, then roles, tech and cities, without repeats, up to the limit', () => {
+    const jobs = [
+        job(1, { role: 'backend', tags: ['Java', 'Kafka'] }),
+        job(2, { role: 'backend', tags: ['Java'], location: 'Pune, Maharashtra, India' }),
+        job(3, { role: 'ml', tags: ['Machine Learning'], workplace: 'remote' }),
+    ];
+    assert.deepEqual(postHashtags(jobs, ['hiring', 'MachineLearning']),
+        ['hiring', 'machinelearning', 'backenddeveloper', 'java', 'kafka', 'bengalurujobs', 'punejobs', 'remotejobs']);
+    assert.equal(postHashtags(jobs, ['hiring'], 4).length, 4);
+});
+
+test('picture: lists each job, escapes text and renders a PNG', () => {
+    const jobs = [{ company: 'AT&T <Labs>', title: 'Engineer', place: 'Pune', pay: '₹20L' }, { company: 'Co', title: 'Dev' }];
+    const svg = postImageSvg({ jobs, siteUrl: 'https://jobs.example.com/', date: new Date('2026-10-20T10:00:00Z') });
+    assert.match(svg, /AT&amp;T &lt;Labs&gt;/);
+    assert.match(svg, />2 new openings</);
+    assert.match(svg, /20 Oct 2026/);
+    assert.match(svg, /jobs\.example\.com</);
+    const png = renderPostImage({ jobs, siteUrl: 'https://jobs.example.com' });
+    assert.deepEqual([...png.subarray(1, 4)], [...Buffer.from('PNG')]);
 });

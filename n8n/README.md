@@ -8,13 +8,19 @@ Each person (Animesh, Sachin, …) runs their own n8n on Railway with their own 
    They show on the private page `/posts.html` and, as data, in the Supabase view `public_linkedin_posts`.
 3. **Ping**: the same run calls each person's n8n webhook (GitHub secret `N8N_WEBHOOK_<ID>`) with the post ID.
 4. **Fetch and check** (n8n): reads the post from Supabase and checks it against the template (first line,
-   numbered job lines, at most one link per job and one link to its `/alert.html` page at the end, 1 to 5 hashtags, at most 3,000 characters).
+   numbered job lines, at most one link per job and one link to its `/alert.html` page at the end, 1 to 12 hashtags, at most 3,000 characters).
 5. **Telegram approval** (n8n): sends you the post on Telegram with Approve and Decline buttons, and waits.
-6. **Post** (n8n): on Approve, posts it to your LinkedIn with your LinkedIn credential.
+6. **Post** (n8n): on Approve, fetches the post's picture (view `public_post_images`) and posts both to your
+   LinkedIn with your LinkedIn credential.
 7. **Report back** (n8n): tells the site the post was posted (with its LinkedIn link) or declined, so the posts
    page shows it.
 
-Each job goes into one post only, ever, so the two of you never post the same opening.
+Each job goes into one post only, ever, so the two of you never post the same opening. A job is also skipped when
+the same company's same title (ignoring case and punctuation) was in a post in the last 30 days, or is listed
+twice in the same scrape: LinkedIn often lists one opening under new ids or once per city.
+
+Each post gets a picture: a 1200×1200 card listing its jobs (company, pay, title, place) and the site, drawn by
+`src/post-image.js` when the post is written and stored in `posts.image`.
 
 ## Setup for each person
 
@@ -46,6 +52,17 @@ A person without `N8N_WEBHOOK_<ID>` still gets posts on `/posts.html`; nothing i
 **Trying it by hand:** click **Execute workflow** in n8n. Without a ping it fetches your newest draft post and runs
 the rest of the flow on it (so Approve really posts it). To test the webhook itself, arm it the same way and send
 `POST <Test URL>` with your `Authorization: Bearer <token>` header and `{ "postId": 12 }`.
+
+**Already imported an older version?** Rather than re-importing (which loses your credentials and Person), add the
+picture by hand: between "Approved?" (true) and "Post to LinkedIn" add
+
+- an **HTTP Request** node "Fetch picture": GET `{{ $('Settings').first().json.supabaseUrl }}/rest/v1/public_post_images`
+  with query `id` = `eq.{{ $node['Check against template'].json.id }}` and `select` = `image`, and header `apikey` =
+  `{{ $('Settings').first().json.supabaseKey }}`;
+- a **Convert to File** node "Picture to file": Move Base64 String to File, source property `image`, output field
+  `data`, file name `hiring-alert.png`, MIME type `image/png`;
+
+then in "Post to LinkedIn" set Media Category to **Image** with input binary field `data`.
 
 ## What n8n receives and reads
 
@@ -81,12 +98,15 @@ Report back: `POST <siteUrl>/api/post-status` with `Authorization: Bearer <token
 
 👉 𝗔𝗹𝗹 𝗼𝗳 𝘁𝗵𝗲𝗺 𝗼𝗻 𝗼𝗻𝗲 𝗽𝗮𝗴𝗲: https://…/alert.html?id=12
 
-#hiring #softwareengineering #techjobs #go #react
+#hiring #softwareengineering #techjobs #jobsearch #backenddeveloper #go #react #aws #bengalurujobs #remotejobs
 ```
 
 LinkedIn has no bold or italic, so the heading, labels and company names use Unicode bold letters and places use
 Unicode italic ones, the way LinkedIn formatters do it. Job titles and hashtags stay plain so LinkedIn search finds
 them.
+
+Hashtags: the ones in `linkedin.hashtags`, then the jobs' two most common roles, three most named technologies and
+two most common cities, plus `#remotejobs` when a job is remote, up to `linkedin.maxHashtags` (10).
 
 Each job has its own link (its LinkedIn job page, or its apply link for other sources) and, when known, its pay:
 the salary the listing shows, else the Glassdoor median for the closest role at that company (`payFor()`). Jobs
