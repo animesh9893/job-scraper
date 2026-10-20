@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hiring alert · India &amp; Remote Tech Jobs</title>
+<meta name="description" content="Openings at top companies from this hiring alert, linked to the original job posts.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💼</text></svg>">
+<style>
+  :root {
+    --bg: #f7f7f5; --surface: #ffffff; --text: #1d1d1b; --muted: #6b6b66; --border: #e4e4df;
+    --accent: #2f5bd3; --accent-soft: #e8eefc; --chip: #f0f0ec;
+    --remote: #0f7b4f; --remote-soft: #e3f4ec; --hybrid: #8a5a00; --hybrid-soft: #fbf0d9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141413; --surface: #1d1d1b; --text: #ecece8; --muted: #a0a09a; --border: #2e2e2b;
+      --accent: #8aa8ff; --accent-soft: #1f2a48; --chip: #262624;
+      --remote: #5fd3a0; --remote-soft: #16352a; --hybrid: #e8b860; --hybrid-soft: #3a2e14;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 32px 16px 64px; }
+  header h1 { margin: 0 0 4px; font-size: 26px; letter-spacing: -0.02em; }
+  header p { margin: 0; color: var(--muted); }
+  header a, footer a { color: var(--accent); }
+  ul.jobs { list-style: none; margin: 24px 0 0; padding: 0; display: grid; gap: 10px; }
+  .job { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+  .job:hover { border-color: var(--accent); }
+  .job h2 { margin: 0; font-size: 16px; line-height: 1.35; }
+  .job h2 a { color: var(--text); text-decoration: none; }
+  /* The title link covers the whole card, so a click anywhere opens the job. */
+  .job h2 a::after { content: ""; position: absolute; inset: 0; border-radius: 12px; }
+  .job:hover h2 a { color: var(--accent); }
+  .meta { color: var(--muted); font-size: 14px; }
+  .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .badge { font-size: 12px; padding: 2px 8px; border-radius: 6px; background: var(--chip); color: var(--muted); }
+  .badge.top { background: var(--accent-soft); color: var(--accent); }
+  .badge.remote { background: var(--remote-soft); color: var(--remote); }
+  .badge.hybrid { background: var(--hybrid-soft); color: var(--hybrid); }
+  .empty { text-align: center; color: var(--muted); padding: 48px 0; }
+  footer { margin-top: 32px; color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 id="title">Hiring alert</h1>
+    <p id="sub">Loading…</p>
+  </header>
+  <ul class="jobs" id="list"></ul>
+  <footer>Each opening links to the original job post; apply there. <a href="./">See every job on the board</a>.</footer>
+</div>
+
+<script src="config.js"></script>
+<script type="module">
+// The jobs of one LinkedIn hiring-alert post (?id=<post id>, from the posts table), or of the latest one.
+const $ = (id) => document.getElementById(id);
+const el = (tag, props = {}, ...children) => {
+  const node = Object.assign(document.createElement(tag), props);
+  node.append(...children.filter(Boolean));
+  return node;
+};
+const safeUrl = (u) => { try { const x = new URL(u); return /^https?:$/.test(x.protocol) ? x.href : null; } catch { return null; } };
+const LEVELS = { intern: 'Intern', junior: 'Junior', senior: 'Senior', lead: 'Lead', staff: 'Staff', principal: 'Principal' };
+
+function card(j) {
+  const url = safeUrl(j.url);
+  return el('li', { className: 'job' },
+    el('h2', {}, url ? el('a', { href: url, target: '_blank', rel: 'noopener nofollow', textContent: j.title }) : j.title),
+    el('div', { className: 'meta', textContent: [j.company, j.location].filter(Boolean).join(' · ') }),
+    el('div', { className: 'badges' },
+      j.companyPremium && el('span', { className: 'badge top', textContent: 'Top company' }),
+      j.workplace && el('span', { className: `badge ${j.workplace}`, textContent: j.workplace === 'remote' ? 'Remote' : 'Hybrid' }),
+      LEVELS[j.level] && el('span', { className: 'badge', textContent: LEVELS[j.level] }),
+      ...(j.tags ?? []).slice(0, 5).map((t) => el('span', { className: 'badge', textContent: t }))));
+}
+
+try {
+  const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm');
+  const db = createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY, { auth: { persistSession: false } });
+  let id = Number(new URLSearchParams(location.search).get('id')) || null;
+  if (!id) {
+    const { data, error } = await db.from('public_alert_jobs').select('alertId').order('alertId', { ascending: false }).limit(1);
+    if (error) throw error;
+    id = data[0]?.alertId ?? null;
+  }
+  const { data: jobs, error } = id
+    ? await db.from('public_alert_jobs').select('*').eq('alertId', id).order('position')
+    : { data: [] };
+  if (error) throw error;
+  if (!jobs.length) {
+    $('sub').textContent = 'This hiring alert has no openings listed.';
+    $('list').append(el('li', { className: 'empty', textContent: 'Nothing here yet.' }));
+  } else {
+    const when = new Date(jobs[0].alertAt).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
+    const companies = new Set(jobs.map((j) => j.company)).size;
+    $('title').textContent = `Hiring alert · ${when}`;
+    $('sub').textContent = `${jobs.length} opening${jobs.length === 1 ? '' : 's'} at ${companies} compan${companies === 1 ? 'y' : 'ies'}.`;
+    $('list').append(...jobs.map(card));
+  }
+} catch {
+  $('sub').textContent = 'Could not load this alert. Please try again later.';
+}
+</script>
+</body>
+</html>

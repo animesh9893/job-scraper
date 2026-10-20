@@ -11,6 +11,7 @@ import { loadConfig, requireEnv } from './config.js';
 import { openDb } from './db.js';
 import { createClient, runSearch, normalizeJob, passesFilters, fetchLinkedinCompany, fetchSalaries, salaryRows } from './scrape.js';
 import { loadTokens, checkToken, nextUsableToken } from './tokens.js';
+import { tagJob } from './tags.js';
 
 // In GitHub Actions, errors are also emitted as annotations so they show at the top of the run page.
 function reportError(message) {
@@ -134,6 +135,15 @@ for (const search of searches) {
 
 const linked = await store.linkCompanies();
 console.log(`Linked ${linked} job(s) to companies`);
+
+// Role, level and tech tags from each new job's title and description (keyword rules, no AI). The first run
+// after this was added also tags every older job, 500 at a time.
+let tagged = 0;
+for (let batch; tagged < 20000 && (batch = await store.untaggedJobs(500)).length;) {
+    await store.saveTags(batch.map((j) => ({ source: j.source, job_id: j.job_id, ...tagJob(j) })));
+    tagged += batch.length;
+}
+console.log(`Tagged ${tagged} job(s)`);
 
 // Premium companies without a LinkedIn ID: read it from their LinkedIn page, so the next run searches them.
 const lookups = await store.companiesToHydrate(config.premium.lookupsPerRun);
