@@ -11,9 +11,10 @@ on:
         description: 'Companies to fetch Glassdoor salaries for (blank = salaries.companiesPerRun, a number, or all = every company due)'
         required: false
         default: ''
-  schedule:                     # every 3 hours: the next searchesPerRun searches in the rotation
-    # Off the top of the hour: GitHub delays or silently drops many scheduled runs at :00.
-    - cron: '17 */3 * * *'
+  schedule:                     # every 2 hours: due premium searches plus the next searchesPerRun in the rotation
+    # Off the top of the hour: GitHub delays or silently drops many scheduled runs at :00. Even so, GitHub's
+    # schedule is best effort: runs often start 1 to 2.5 hours late or are skipped (README → Schedule).
+    - cron: '17 */2 * * *'
 
 concurrency:
   group: scrape                 # never run two scrapes at once

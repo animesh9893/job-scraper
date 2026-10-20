@@ -5,7 +5,7 @@ Supabase (Postgres) and publishes a public job board on GitHub Pages.
 
 Searches and categories (the tabs on the site) live in Supabase. The first run adds 8 starting
 searches: frontend, backend, full stack and mobile developer jobs in India, each in an "any workplace"
-and a "remote" variant. Each run does only `searchesPerRun` of them (default 2, about $0.08), the ones
+and a "remote" variant. Each run does only `searchesPerRun` of them (about $0.04 each, or `all`), the ones
 that ran longest ago first, so a limited Apify budget rotates through every search.
 
 ## Run it on GitHub (no local setup)
@@ -23,8 +23,25 @@ The run page shows a results table (found / new / filtered / cost per search).
 Browse the data in Supabase → **Table Editor** → `jobs`, `searches`, `categories` and `runs`.
 Tables are created automatically on the first run.
 
-It also runs on its own every 3 hours (`schedule:` in `.github/workflows/scrape.yml`), each time
-the next `searchesPerRun` searches in the rotation.
+It also runs on its own every 2 hours (`schedule:` in `.github/workflows/scrape.yml`), each time
+the premium searches plus the next `searchesPerRun` searches in the rotation.
+
+### Schedule
+
+GitHub's schedule is best effort. Runs are queued behind everyone else's, so they often start 1 to
+2.5 hours late, and some are skipped (worst at the top of the hour, so the cron uses :17). The
+concurrency group keeps at most one run waiting. For runs on time, trigger the workflow from an outside
+scheduler (n8n's Schedule node, cron-job.org, Railway cron) every 2 hours instead:
+
+```
+POST https://api.github.com/repos/<owner>/<repo>/actions/workflows/scrape.yml/dispatches
+Authorization: Bearer <fine-grained token with Actions: read and write on this repo>
+Accept: application/vnd.github+json
+
+{"ref": "main"}
+```
+
+Then comment out `schedule:` so the two don't double up.
 
 ## Several Apify accounts
 
@@ -179,8 +196,8 @@ Without Docker: `npm install`, then `npm run scrape` / `npm run stats` (with the
 ## Configure
 
 Edit `config/config.yaml`:
-- `defaults`: Actor input shared by all searches (location India, last 24 hours, 20 jobs each).
-- `searchesPerRun`: how many searches each scrape runs (see Searches and categories above).
+- `defaults`: Actor input shared by all searches (location India, last 24 hours, 40 jobs each).
+- `searchesPerRun`: how many searches each scrape runs, or `all` (see Searches and categories above).
   A search's `category` groups its jobs on the site; `workplace: remote` marks every job it finds as
   remote (other jobs are marked remote or hybrid if their title or location says so).
 - `site`: page title, how many days of jobs to show, max jobs.
@@ -239,7 +256,7 @@ first three tags on each job.
 
 ## Workflows
 
-- `scrape.yml`: "Run workflow" button and a 3-hourly schedule that scrapes and stores jobs, then
+- `scrape.yml`: "Run workflow" button and a 2-hourly schedule that scrapes and stores jobs, then
   publishes the job board (when `PUBLISH_SITE=true`).
 - `ci.yml`: on every push, checks syntax and that `config.yaml` loads.
 

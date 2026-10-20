@@ -7,8 +7,9 @@ export function loadConfig() {
     const config = parse(readFileSync(CONFIG_PATH, 'utf8'));
 
     if (!config.actor) throw new Error(`${CONFIG_PATH}: "actor" is required`);
-    if (config.searchesPerRun !== undefined && !(Number.isInteger(config.searchesPerRun) && config.searchesPerRun > 0)) {
-        throw new Error(`${CONFIG_PATH}: "searchesPerRun" must be a whole number above 0`);
+    if (config.searchesPerRun !== undefined && config.searchesPerRun !== 'all'
+        && !(Number.isInteger(config.searchesPerRun) && config.searchesPerRun > 0)) {
+        throw new Error(`${CONFIG_PATH}: "searchesPerRun" must be a whole number above 0, or all`);
     }
 
     return {
