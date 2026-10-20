@@ -19,6 +19,30 @@ export function splitJobs(jobs, people, perPost) {
     return out;
 }
 
+// LinkedIn posts have no bold or italic, so, like LinkedIn formatters, we use Unicode's sans-serif bold and
+// italic letters (𝗔 = A + 0x1D5D4 − 0x41). Other characters are kept as they are.
+const STYLES = { bold: { A: 0x1d5d4, a: 0x1d5ee, 0: 0x1d7ec }, italic: { A: 0x1d608, a: 0x1d622 } };
+function styled(text, style) {
+    return String(text).replace(/[A-Za-z0-9]/g, (c) => {
+        const first = /[A-Z]/.test(c) ? 'A' : /[a-z]/.test(c) ? 'a' : '0';
+        const start = STYLES[style][first];
+        return start ? String.fromCodePoint(start + c.charCodeAt(0) - first.charCodeAt(0)) : c;
+    });
+}
+export const bold = (text) => styled(text, 'bold');
+export const italic = (text) => styled(text, 'italic');
+
+/** Turns bold and italic letters back into plain ones, so checks and searches see ordinary text. */
+export function plain(text) {
+    return [...String(text ?? '')].map((ch) => {
+        const cp = ch.codePointAt(0);
+        for (const [start, first, count] of [[0x1d5d4, 65, 26], [0x1d5ee, 97, 26], [0x1d7ec, 48, 10], [0x1d608, 65, 26], [0x1d622, 97, 26]]) {
+            if (cp >= start && cp < start + count) return String.fromCharCode(first + cp - start);
+        }
+        return ch;
+    }).join('');
+}
+
 // "Bengaluru, Karnataka, India" → "Bengaluru"; remote jobs say so.
 function where({ location, workplace }) {
     const city = String(location ?? '').split(',')[0].trim();
@@ -29,7 +53,10 @@ function where({ location, workplace }) {
 // "Node.js" → "nodejs", "C++" → "cpp", "C#" → "csharp", "Machine Learning" → "machinelearning".
 const hashtag = (tag) => tag.toLowerCase().replace(/\+\+/g, 'pp').replace(/#/g, 'sharp').replace(/[^a-z0-9]/g, '');
 
-/** The post text: a numbered list of the jobs, the most named tech, one link to its /alert.html page, hashtags. */
+/**
+ * The post text: a bold heading, a numbered list of the jobs (company in bold, place in italics), the most named
+ * tech, one link to its /alert.html page, hashtags. Job titles and hashtags stay plain so LinkedIn search finds them.
+ */
 export function buildPost({ id, jobs, siteUrl, hashtags = [] }) {
     const companies = new Set(jobs.map((j) => j.company)).size;
     const counts = new Map();
@@ -37,12 +64,12 @@ export function buildPost({ id, jobs, siteUrl, hashtags = [] }) {
     const top = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 3).map(([t]) => t);
     const tags = [...new Set([...hashtags, ...top.map(hashtag)].filter(Boolean))].slice(0, 5);
     return [
-        `🚀 Hiring alert: ${jobs.length} new opening${jobs.length === 1 ? '' : 's'} at ${companies} compan${companies === 1 ? 'y' : 'ies'}`,
+        `🚀 ${bold(`Hiring alert: ${jobs.length} new opening${jobs.length === 1 ? '' : 's'} at ${companies} compan${companies === 1 ? 'y' : 'ies'}`)}`,
         '',
-        ...jobs.map((j, i) => `${i + 1}. ${j.company}: ${j.title}${where(j) ? ` · ${where(j)}` : ''}`),
+        ...jobs.map((j, i) => `${i + 1}. ${bold(j.company)}: ${j.title}${where(j) ? ` · ${italic(where(j))}` : ''}`),
         '',
-        ...(top.length ? [`🔥 In demand: ${top.join(', ')}`, ''] : []),
-        `👉 Every opening with its apply link: ${siteUrl.replace(/\/$/, '')}/alert.html?id=${id}`,
+        ...(top.length ? [`🔥 ${bold('In demand:')} ${top.join(', ')}`, ''] : []),
+        `👉 ${bold('Every opening with its apply link:')} ${siteUrl.replace(/\/$/, '')}/alert.html?id=${id}`,
         '',
         tags.map((t) => `#${t}`).join(' '),
     ].join('\n');
@@ -51,13 +78,16 @@ export function buildPost({ id, jobs, siteUrl, hashtags = [] }) {
 /**
  * Problems with a post compared with the template, empty when it's fine. n8n runs the same checks before it
  * asks for approval (n8n/hiring-alert-workflow.json, node "Check against template"); keep the two in step.
+ * Bold and italic letters count as plain ones.
  */
 export function checkPost(body) {
     const problems = [];
-    const text = String(body ?? '');
+    const text = plain(body);
     const lines = text.split('\n');
     if (!/^🚀 Hiring alert: \d+ new opening/.test(lines[0] ?? '')) problems.push('first line is not "🚀 Hiring alert: N new openings…"');
-    if (text.length > MAX_CHARS) problems.push(`${text.length} characters, LinkedIn allows ${MAX_CHARS}`);
+    // Counted on the raw text, where a bold letter takes two units, to stay safely under LinkedIn's limit.
+    const length = String(body ?? '').length;
+    if (length > MAX_CHARS) problems.push(`${length} characters, LinkedIn allows ${MAX_CHARS}`);
     const jobs = lines.filter((l) => /^\d+\. .+: .+/.test(l)).length;
     if (jobs < 1 || jobs > 15) problems.push(`${jobs} job lines, expected 1 to 15`);
     const links = text.match(/https?:\/\/\S+/g) ?? [];

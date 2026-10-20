@@ -60,18 +60,22 @@ Report back: `POST <siteUrl>/api/post-status` with `Authorization: Bearer <token
 ## The template
 
 ```
-🚀 Hiring alert: 6 new openings at 5 companies
+🚀 𝗛𝗶𝗿𝗶𝗻𝗴 𝗮𝗹𝗲𝗿𝘁: 𝟲 𝗻𝗲𝘄 𝗼𝗽𝗲𝗻𝗶𝗻𝗴𝘀 𝗮𝘁 𝟱 𝗰𝗼𝗺𝗽𝗮𝗻𝗶𝗲𝘀
 
-1. Google: Senior Software Engineer · Bengaluru
-2. Razorpay: Backend Engineer (Golang) · Bengaluru (Remote)
+1. 𝗚𝗼𝗼𝗴𝗹𝗲: Senior Software Engineer · 𝘉𝘦𝘯𝘨𝘢𝘭𝘶𝘳𝘶
+2. 𝗥𝗮𝘇𝗼𝗿𝗽𝗮𝘆: Backend Engineer (Golang) · 𝘉𝘦𝘯𝘨𝘢𝘭𝘶𝘳𝘶 (𝘙𝘦𝘮𝘰𝘵𝘦)
 …
 
-🔥 In demand: Go, React, AWS
+🔥 𝗜𝗻 𝗱𝗲𝗺𝗮𝗻𝗱: Go, React, AWS
 
-👉 Every opening with its apply link: https://…/alert.html?id=12
+👉 𝗘𝘃𝗲𝗿𝘆 𝗼𝗽𝗲𝗻𝗶𝗻𝗴 𝘄𝗶𝘁𝗵 𝗶𝘁𝘀 𝗮𝗽𝗽𝗹𝘆 𝗹𝗶𝗻𝗸: https://…/alert.html?id=12
 
 #hiring #softwareengineering #techjobs #go #react
 ```
+
+LinkedIn has no bold or italic, so the heading, labels and company names use Unicode bold letters and places use
+Unicode italic ones, the way LinkedIn formatters do it. Job titles and hashtags stay plain so LinkedIn search finds
+them.
 
 It's written by `buildPost()` and checked by `checkPost()` in `src/linkedin-posts.js`. The workflow's "Check
 against template" node runs the same checks; change both together.
