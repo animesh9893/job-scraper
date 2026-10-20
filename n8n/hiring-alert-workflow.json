@@ -2,6 +2,17 @@
   "name": "LinkedIn hiring alert",
   "nodes": [
     {
+      "parameters": {},
+      "id": "ed074f74-18cb-4df3-8ff4-aefaa9d5f186",
+      "name": "Run by hand",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        500
+      ]
+    },
+    {
       "parameters": {
         "httpMethod": "POST",
         "path": "hiring-alert",
@@ -61,8 +72,8 @@
             {
               "id": "49a8ca90-2200-4abd-bac4-a167faf57091",
               "name": "postId",
-              "value": "={{ $json.body.postId }}",
-              "type": "number"
+              "value": "={{ $json.body?.postId ?? '' }}",
+              "type": "string"
             }
           ]
         },
@@ -85,11 +96,23 @@
           "parameters": [
             {
               "name": "id",
-              "value": "=eq.{{ $('Settings').first().json.postId }}"
+              "value": "={{ $('Settings').first().json.postId ? 'eq.' + $('Settings').first().json.postId : 'gt.0' }}"
             },
             {
               "name": "person",
               "value": "=eq.{{ $('Settings').first().json.person }}"
+            },
+            {
+              "name": "status",
+              "value": "={{ $('Settings').first().json.postId ? 'not.is.null' : 'eq.draft' }}"
+            },
+            {
+              "name": "order",
+              "value": "createdAt.desc"
+            },
+            {
+              "name": "limit",
+              "value": "1"
             }
           ]
         },
@@ -281,7 +304,7 @@
           "parameters": [
             {
               "name": "id",
-              "value": "={{ $('Settings').first().json.postId }}"
+              "value": "={{ $node['Check against template'].json.id }}"
             },
             {
               "name": "status",
@@ -322,7 +345,7 @@
           "parameters": [
             {
               "name": "id",
-              "value": "={{ $('Settings').first().json.postId }}"
+              "value": "={{ $node['Check against template'].json.id }}"
             },
             {
               "name": "status",
@@ -439,6 +462,17 @@
         [
           {
             "node": "Report posted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run by hand": {
+      "main": [
+        [
+          {
+            "node": "Settings",
             "type": "main",
             "index": 0
           }
