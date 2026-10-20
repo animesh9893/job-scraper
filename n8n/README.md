@@ -42,6 +42,10 @@ Do this once per person; `<ID>` is their id in `linkedin.people` in capitals (`A
 
 A person without `N8N_WEBHOOK_<ID>` still gets posts on `/posts.html`; nothing is sent to them.
 
+**Trying it by hand:** click **Execute workflow** in n8n. Without a ping it fetches your newest draft post and runs
+the rest of the flow on it (so Approve really posts it). To test the webhook itself, arm it the same way and send
+`POST <Test URL>` with your `Authorization: Bearer <token>` header and `{ "postId": 12 }`.
+
 ## What n8n receives and reads
 
 Ping from GitHub: `POST <webhook URL>` with `Authorization: Bearer <token>` and
@@ -50,7 +54,8 @@ Ping from GitHub: `POST <webhook URL>` with `Authorization: Bearer <token>` and
 { "postId": 12, "person": "sachin", "jobs": 6, "alertUrl": "https://…/alert.html?id=12" }
 ```
 
-The post itself: `GET <supabaseUrl>/rest/v1/public_linkedin_posts?id=eq.12&person=eq.sachin` with header
+The post itself: `GET <supabaseUrl>/rest/v1/public_linkedin_posts?id=eq.12&person=eq.sachin` (or, run by hand,
+`?person=eq.sachin&status=eq.draft&order=createdAt.desc&limit=1`) with header
 `apikey: <supabaseKey>` returns `[{ "id", "person", "status", "body", "linkedinUrl", "createdAt", "postedAt", "jobs" }]`.
 
 Report back: `POST <siteUrl>/api/post-status` with `Authorization: Bearer <token>` and
