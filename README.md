@@ -196,7 +196,7 @@ Without Docker: `npm install`, then `npm run scrape` / `npm run stats` (with the
 ## Configure
 
 Edit `config/config.yaml`:
-- `defaults`: Actor input shared by all searches (location India, last 24 hours, 20 jobs each).
+- `defaults`: Actor input shared by all searches (location India, last 24 hours, 40 jobs each).
 - `searchesPerRun`: how many searches each scrape runs, or `all` (see Searches and categories above).
   A search's `category` groups its jobs on the site; `workplace: remote` marks every job it finds as
   remote (other jobs are marked remote or hybrid if their title or location says so).

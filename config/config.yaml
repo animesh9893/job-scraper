@@ -11,15 +11,15 @@ timeoutSecs: 900
 defaults:
   location: India
   datePosted: past24Hours
-  limitPerSource: 20
+  limitPerSource: 40
   scrapeCompany: false
 
 # Searches and categories live in Supabase (tables `searches` and `categories`).
 # Manage them with `node src/searches.js` (see README) or in Supabase's Table Editor.
 # Each scrape (every 2 hours) runs this many searches, the ones that ran longest ago first, so a limited
-# Apify budget rotates through all of them. A search costs about $0.04. `all` runs every active search
-# each time (about $1 a run, $12 a day); `node src/run.js all` does that once.
-searchesPerRun: 8
+# Apify budget rotates through all of them. `all` runs every active search each time. The Actor bills about
+# $0.0018 per job it returns, so 25 searches at limitPerSource 40 is about $1.80 a run, $22 a day.
+searchesPerRun: all
 
 # Premium companies (table `companies`, is_premium) are searched on LinkedIn by company ID in groups of
 # companiesPerSearch, as searches premium-1, premium-2, … that run every intervalHours on top of the rotation.
@@ -42,7 +42,7 @@ premium:
 # the cached salaries are used. A failed fetch is retried a day later. companiesPerRun: 0 turns it off.
 salaries:
   actor: axlymxp/glassdoor-salary-scraper
-  companiesPerRun: 2
+  companiesPerRun: 5
   refreshDays: 14
   location: India
   locationType: country    # city | state | country
