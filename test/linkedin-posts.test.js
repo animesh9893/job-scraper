@@ -41,7 +41,7 @@ test('post follows the template and passes the check', () => {
     ]);
     assert.doesNotMatch(body, /linkedin\.com/);
     assert.match(plain(body), /🔥 In demand: React, C\+\+, TypeScript/);
-    assert.match(body, /https:\/\/jobs\.example\.com\/alert\.html\?id=42$/m);
+    assert.match(body, /https:\/\/jobs\.example\.com\/$/m);
     assert.equal(lines.at(-1), '#hiring #react #cpp #typescript #bengalurujobs #remotejobs');
     assert.deepEqual(checkPost(body), []);
 });
