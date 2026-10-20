@@ -98,7 +98,9 @@ linkedin:
   jobsPerPost: 10
   minJobs: 10           # no post for a person who would get fewer new jobs than this; they wait for the next one
   hashtags: [hiring, softwareengineering, techjobs, jobsearch]
-  maxHashtags: 10       # configured hashtags first, then the jobs' roles, tech and cities
+  maxHashtags: 25       # configured hashtags first, then the jobs' roles, tech, cities and companies, then filler ones
+  fillerHashtags: [jobs, nowhiring, jobopening, careers, jobseekers, opentowork, softwaredeveloper, softwarejobs,
+                   itjobs, developers, programming, technology, engineering, freshers, career]
   people:
     - id: animesh
       name: Animesh

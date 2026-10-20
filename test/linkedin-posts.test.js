@@ -42,7 +42,7 @@ test('post follows the template and passes the check', () => {
     assert.doesNotMatch(body, /linkedin\.com/);
     assert.match(plain(body), /🔥 In demand: React, C\+\+, TypeScript/);
     assert.match(body, /https:\/\/jobs\.example\.com\/$/m);
-    assert.equal(lines.at(-1), '#hiring #react #cpp #typescript #bengalurujobs #remotejobs');
+    assert.equal(lines.at(-1), '#hiring #react #cpp #typescript #bengalurujobs #remotejobs #co0 #co1 #co2');
     assert.deepEqual(checkPost(body), []);
 });
 
@@ -103,14 +103,15 @@ test('the n8n workflow runs the same template check', async () => {
     assert.equal(code.split('function plain(').length, 2, 'plain() is in the workflow once');
 });
 
-test('hashtags: configured ones, then roles, tech and cities, without repeats, up to the limit', () => {
+test('hashtags: configured ones, then roles, tech, cities, companies and filler, without repeats, up to the limit', () => {
     const jobs = [
         job(1, { role: 'backend', tags: ['Java', 'Kafka'] }),
         job(2, { role: 'backend', tags: ['Java'], location: 'Pune, Maharashtra, India' }),
         job(3, { role: 'ml', tags: ['Machine Learning'], workplace: 'remote' }),
     ];
-    assert.deepEqual(postHashtags(jobs, ['hiring', 'MachineLearning']),
-        ['hiring', 'machinelearning', 'backenddeveloper', 'java', 'kafka', 'bengalurujobs', 'punejobs', 'remotejobs']);
+    assert.deepEqual(postHashtags(jobs, ['hiring', 'MachineLearning'], 30, ['jobs', 'Hiring']),
+        ['hiring', 'machinelearning', 'backenddeveloper', 'java', 'kafka', 'bengalurujobs', 'punejobs', 'remotejobs',
+            'co0', 'co1', 'co2', 'jobs']);
     assert.equal(postHashtags(jobs, ['hiring'], 4).length, 4);
 });
 
@@ -155,4 +156,13 @@ test('picture: logos fall back to the site icon, then to initials, and text is e
     assert.match(svg, /jobs\.example\.com</);
     const png = renderPostImage({ featured: [{ ...c, jobs: [] }], jobs: 1, companiesInPost: 1, siteUrl: 'https://jobs.example.com' });
     assert.deepEqual([...png.subarray(1, 4)], [...Buffer.from('PNG')]);
+});
+
+test('a long post drops hashtags before going over LinkedIn\'s limit', () => {
+    const jobs = Array.from({ length: 10 }, (_, i) => job(i, { title: 'Senior Software Engineer II, Backend Platform (Golang)',
+        company: `Cencora Global Capability Center ${i}`, tags: ['Go', 'Kubernetes'], pay: '~₹45L/yr on Glassdoor' }));
+    const filler = Array.from({ length: 30 }, (_, i) => `longfillerhashtag${i}`);
+    const body = buildPost({ id: 1, siteUrl: 'https://job-scraper-web-beryl.vercel.app', hashtags: ['hiring'], maxHashtags: 30, fillerHashtags: filler, jobs });
+    assert.ok(body.length <= 3000, `${body.length} characters`);
+    assert.deepEqual(checkPost(body), []);
 });
