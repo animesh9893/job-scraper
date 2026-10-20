@@ -53,9 +53,66 @@ function where({ location, workplace }) {
 // "Node.js" → "nodejs", "C++" → "cpp", "C#" → "csharp", "Machine Learning" → "machinelearning".
 const hashtag = (tag) => tag.toLowerCase().replace(/\+\+/g, 'pp').replace(/#/g, 'sharp').replace(/[^a-z0-9]/g, '');
 
+// The Glassdoor roles (config salaries.roles) that fit a job, best first. Interns get none: a full-time median
+// would mislead. Managers, product, design and data roles don't fall back to software engineer pay.
+export function payRoles({ title, role, level }) {
+    if (level === 'intern') return [];
+    const t = String(title ?? '').toLowerCase();
+    const senior = ['senior', 'lead', 'staff', 'principal'].includes(level);
+    const byLevel = { principal: 'Principal Software Engineer', staff: 'Staff Software Engineer',
+        lead: 'Senior Software Engineer', senior: 'Senior Software Engineer' }[level];
+    const byRole = {
+        manager: ['Engineering Manager'],
+        product: [senior ? 'Senior Product Manager' : 'Product Manager', 'Product Manager'],
+        design: ['Product Designer'],
+        ml: ['Machine Learning Engineer', 'Data Scientist'],
+        data: [/scientist/.test(t) ? 'Data Scientist' : /analyst/.test(t) ? 'Data Analyst' : 'Data Engineer'],
+        devops: [/reliability|\bsre\b/.test(t) ? 'Site Reliability Engineer' : 'DevOps Engineer', 'Site Reliability Engineer'],
+        qa: ['QA Engineer'],
+        mobile: [/android/.test(t) ? 'Android Developer' : /\bios\b/.test(t) ? 'iOS Developer' : 'Mobile Developer', 'Mobile Developer'],
+        fullstack: ['Full Stack Developer'],
+        frontend: ['Frontend Developer'],
+        backend: ['Backend Developer'],
+    }[role] ?? [];
+    const engineering = !['manager', 'product', 'design', 'data'].includes(role);
+    return [...new Set([...(engineering && byLevel ? [byLevel] : []), ...byRole, ...(engineering ? ['Software Engineer'] : [])])];
+}
+
+// 2450000 INR → "₹24L", 850000 → "₹8.5L"; 132000 USD → "$132k".
+function money(amount, currency) {
+    if (currency === 'INR') return `₹${amount >= 1e6 ? Math.round(amount / 1e5) : Math.round(amount / 1e4) / 10}L`;
+    const k = `${Math.round(amount / 1000)}k`;
+    return { USD: `$${k}`, EUR: `€${k}`, GBP: `£${k}` }[currency] ?? `${currency} ${k}`;
+}
+
 /**
- * The post text: a bold heading, a numbered list of the jobs (company in bold, place in italics), the most named
- * tech, one link to its /alert.html page, hashtags. Job titles and hashtags stay plain so LinkedIn search finds them.
+ * The pay line for a job: the salary its listing shows, else the Glassdoor median for its role at its company
+ * (rows from company_salaries: { company_slug, query, currency, median }), else null.
+ */
+export function payFor(job, salaries = []) {
+    // A plain string, or a list stored as text ('["₹20L","₹30L"]' or '{₹20L,₹30L}') shown as a range.
+    const raw = String(job.salary ?? '').trim();
+    const listed = /^[[{]/.test(raw) ? raw.replace(/[[\]{}"]/g, '').split(/\s*,\s*/).filter(Boolean).join(' – ') : raw;
+    if (listed && listed.length <= 40) return listed;
+    const mine = salaries.filter((s) => s.company_slug === job.company_slug && s.median > 0);
+    for (const role of payRoles(job)) {
+        const row = mine.find((s) => s.query === role);
+        if (row) return `~${money(Number(row.median), row.currency)}/yr on Glassdoor`;
+    }
+    return null;
+}
+
+/** The job's own page: a short linkedin.com/jobs/view/<id> link when it is a LinkedIn job, else its apply link. */
+export function jobLink({ url, apply_url: applyUrl }) {
+    const id = String(url ?? '').match(/linkedin\.com\/jobs\/view\/(?:[^/?#]*-)?(\d{6,})/)?.[1];
+    if (id) return `https://www.linkedin.com/jobs/view/${id}`;
+    return /^https?:\/\//.test(url ?? '') ? url : /^https?:\/\//.test(applyUrl ?? '') ? applyUrl : null;
+}
+
+/**
+ * The post text: a bold heading; for each job a numbered line (company in bold, place in italics), its pay when
+ * known (job.pay, see payFor) and its link; the most named tech; a link to the post's /alert.html page; hashtags.
+ * Job titles and hashtags stay plain so LinkedIn search finds them.
  */
 export function buildPost({ id, jobs, siteUrl, hashtags = [] }) {
     const companies = new Set(jobs.map((j) => j.company)).size;
@@ -66,10 +123,14 @@ export function buildPost({ id, jobs, siteUrl, hashtags = [] }) {
     return [
         `🚀 ${bold(`Hiring alert: ${jobs.length} new opening${jobs.length === 1 ? '' : 's'} at ${companies} compan${companies === 1 ? 'y' : 'ies'}`)}`,
         '',
-        ...jobs.map((j, i) => `${i + 1}. ${bold(j.company)}: ${j.title}${where(j) ? ` · ${italic(where(j))}` : ''}`),
-        '',
+        ...jobs.flatMap((j, i) => [
+            `${i + 1}. ${bold(j.company)}: ${j.title}${where(j) ? ` · ${italic(where(j))}` : ''}`,
+            ...(j.pay ? [`💰 ${j.pay}`] : []),
+            ...(jobLink(j) ? [`🔗 ${jobLink(j)}`] : []),
+            '',
+        ]),
         ...(top.length ? [`🔥 ${bold('In demand:')} ${top.join(', ')}`, ''] : []),
-        `👉 ${bold('Every opening with its apply link:')} ${siteUrl.replace(/\/$/, '')}/alert.html?id=${id}`,
+        `👉 ${bold('All of them on one page:')} ${siteUrl.replace(/\/$/, '')}/alert.html?id=${id}`,
         '',
         tags.map((t) => `#${t}`).join(' '),
     ].join('\n');
@@ -91,7 +152,9 @@ export function checkPost(body) {
     const jobs = lines.filter((l) => /^\d+\. .+: .+/.test(l)).length;
     if (jobs < 1 || jobs > 15) problems.push(`${jobs} job lines, expected 1 to 15`);
     const links = text.match(/https?:\/\/\S+/g) ?? [];
-    if (links.length !== 1 || !/\/alert\.html\?id=\d+$/.test(links[0])) problems.push('needs exactly one link, to /alert.html?id=…');
+    const alert = links.filter((l) => /\/alert\.html\?id=\d+$/.test(l));
+    if (alert.length !== 1 || alert[0] !== links.at(-1)) problems.push('needs one link to /alert.html?id=…, after all the others');
+    if (links.length - 1 > jobs) problems.push(`${links.length - 1} job links for ${jobs} jobs`);
     const tags = (lines.at(-1) ?? '').match(/#\w+/g) ?? [];
     if (tags.length < 1 || tags.length > 5) problems.push(`${tags.length} hashtags on the last line, expected 1 to 5`);
     if (/\b(undefined|null|NaN)\b/.test(text)) problems.push('contains "undefined", "null" or "NaN"');
@@ -120,6 +183,10 @@ async function main() {
     const made = [];
     try {
         const { rows: candidates } = await store.query('SELECT * FROM post_candidates LIMIT $1', [cfg.jobsPerPost * cfg.people.length]);
+        const { rows: salaries } = await store.query(
+            `SELECT company_slug, query, currency, median_annual::float AS median FROM company_salaries
+             WHERE company_slug = ANY($1) ORDER BY median_annual DESC`, [[...new Set(candidates.map((j) => j.company_slug))]]);
+        for (const job of candidates) job.pay = payFor(job, salaries);
         const split = splitJobs(candidates, cfg.people, cfg.jobsPerPost);
         for (const person of cfg.people) {
             const jobs = split.get(person.id);
