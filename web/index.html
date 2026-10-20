@@ -123,6 +123,11 @@
   .salaries td { padding: 4px 0; border-top: 1px solid var(--border); vertical-align: top; }
   .salaries td + td { text-align: right; padding-left: 12px; white-space: nowrap; }
   .salaries .mid { color: var(--muted); font-size: 12px; }
+  .salary-more {
+    margin-top: 6px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface);
+    color: var(--accent); font: inherit; font-size: 13px; cursor: pointer;
+  }
+  .salary-more:hover { border-color: var(--accent); }
   .salaries .src { color: var(--muted); font-size: 12px; margin-top: 4px; }
   .company-info { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin: 8px 0; }
   .company-info h2 { margin: 0 0 2px; font-size: 16px; display: flex; align-items: center; gap: 8px; }
@@ -152,31 +157,41 @@
   .credits a { color: var(--accent); text-decoration: none; font-weight: 600; }
   .credits a:hover { text-decoration: underline; }
   @media (max-width: 560px) { .credits { margin-left: 0; } }
+  /* The list scrolls forever, so on wide screens the footer sits in a sticky left column instead of below it. */
+  @media (min-width: 1000px) {
+    .wrap { max-width: 1180px; display: grid; grid-template-columns: 240px minmax(0, 880px); justify-content: center; column-gap: 40px; }
+    .main-col { grid-column: 2; grid-row: 1; min-width: 0; }
+    .site-foot { grid-column: 1; grid-row: 1; align-self: start; position: sticky; top: 24px; margin-top: 76px; flex-direction: column; flex-wrap: nowrap; }
+    .site-foot .foot-text { flex: none; }
+    .credits { margin-left: 0; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <nav class="site-links" aria-label="Site policies"><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="copyright.html">Copyright</a></nav>
-  <header>
-    <div class="brand"><img src="logo.svg" alt=""><h1 id="title">India &amp; Remote Tech Jobs</h1></div>
-    <p>Frontend, backend, full stack and mobile developer jobs in India and remote.</p>
-    <button class="refresh" id="refresh" type="button"><span class="icon" aria-hidden="true">↻</span> Refresh jobs</button>
-  </header>
-  <p class="fresh">🔔 New jobs are added every few hours. <button type="button" id="refresh2">Refresh</button> to see the latest.</p>
-  <button class="refresh floating" id="refresh3" type="button" hidden><span class="icon" aria-hidden="true">↻</span> Refresh</button>
+  <div class="main-col">
+    <nav class="site-links" aria-label="Site policies"><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="copyright.html">Copyright</a></nav>
+    <header>
+      <div class="brand"><img src="logo.svg" alt=""><h1 id="title">India &amp; Remote Tech Jobs</h1></div>
+      <p>Frontend, backend, full stack and mobile developer jobs in India and remote.</p>
+      <button class="refresh" id="refresh" type="button"><span class="icon" aria-hidden="true">↻</span> Refresh jobs</button>
+    </header>
+    <p class="fresh">🔔 New jobs are added every few hours. <button type="button" id="refresh2">Refresh</button> to see the latest.</p>
+    <button class="refresh floating" id="refresh3" type="button" hidden><span class="icon" aria-hidden="true">↻</span> Refresh</button>
 
-  <div class="controls">
-    <div class="row" id="categories" role="group" aria-label="Category"></div>
-    <div class="row" id="workplaces" role="group" aria-label="Workplace"></div>
-    <div class="row companies" id="companies" role="group" aria-label="Companies" hidden></div>
-    <input type="search" id="q" list="company-names" placeholder="Search title, company or location…" aria-label="Search jobs">
-    <datalist id="company-names"></datalist>
+    <div class="controls">
+      <div class="row" id="categories" role="group" aria-label="Category"></div>
+      <div class="row" id="workplaces" role="group" aria-label="Workplace"></div>
+      <div class="row companies" id="companies" role="group" aria-label="Companies" hidden></div>
+      <input type="search" id="q" list="company-names" placeholder="Search title, company or location…" aria-label="Search jobs">
+      <datalist id="company-names"></datalist>
+    </div>
+
+    <section class="company-info" id="company-info" hidden></section>
+    <p class="count" id="count" aria-live="polite">Loading jobs…</p>
+    <ul class="jobs" id="list"></ul>
+    <div class="more" id="more" hidden>Loading more jobs…</div>
   </div>
-
-  <section class="company-info" id="company-info" hidden></section>
-  <p class="count" id="count" aria-live="polite">Loading jobs…</p>
-  <ul class="jobs" id="list"></ul>
-  <div class="more" id="more" hidden>Loading more jobs…</div>
 
   <div class="site-foot">
     <div class="foot-text">
@@ -362,12 +377,24 @@ const salariesOf = (slug) => {
   return SALARIES.get(slug);
 };
 
-/** The per-role table: typical (median) pay, with the 10th to 90th percentile under it. */
+/** The per-role table: typical (median) pay, with the 10th to 90th percentile under it. Long lists show
+ *  SALARY_ROWS rows and a button that expands or collapses the rest. */
+const SALARY_ROWS = 5;
 function salaryTable(rows) {
+  const trs = rows.map((r, i) => el('tr', { hidden: i >= SALARY_ROWS },
+    el('td', { textContent: r.title }),
+    el('td', {}, money(r.median, r.currency), el('div', { className: 'mid', textContent: range(r.min, r.max, r.currency) }))));
+  const more = `Show all ${rows.length} roles ▾`;
+  const toggle = rows.length > SALARY_ROWS && el('button', { className: 'salary-more', type: 'button', textContent: more,
+    ariaExpanded: 'false', onclick() {
+      const open = this.ariaExpanded !== 'true';
+      trs.forEach((tr, i) => { if (i >= SALARY_ROWS) tr.hidden = !open; });
+      this.ariaExpanded = String(open);
+      this.textContent = open ? 'Show fewer ▴' : more;
+    } });
   return el('div', { className: 'salaries' },
-    el('table', {}, el('tbody', {}, ...rows.map((r) => el('tr', {},
-      el('td', { textContent: r.title }),
-      el('td', {}, money(r.median, r.currency), el('div', { className: 'mid', textContent: range(r.min, r.max, r.currency) })))))),
+    el('table', {}, el('tbody', {}, ...trs)),
+    toggle,
     el('div', { className: 'src', textContent: 'Yearly total pay per Glassdoor: median, and the 10th to 90th percentile below it.' }));
 }
 

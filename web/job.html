@@ -203,7 +203,7 @@ function closest(j, salaries) {
 function salarySection(j, salaries, match) {
   if (!salaries.length) return null;
   const rows = [...(match ? [match] : []), ...salaries.filter((s) => s !== match)];
-  const SHOWN = 6;
+  const SHOWN = 5;
   return el('section', { className: 'salaries' },
     el('h2', { textContent: `Salaries at ${j.company} on Glassdoor` }),
     el('table', {}, el('tbody', {}, ...rows.map((r, i) => el('tr', { className: r === match ? 'match' : '', hidden: i >= SHOWN },
