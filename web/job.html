@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9664106331529294"
      crossorigin="anonymous"></script>
-<title>Job · India &amp; Remote Tech Jobs</title>
+<title>Job · Tech Jobs</title>
 <meta name="description" content="Job details, pay and the link to apply on LinkedIn.">
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <style>
@@ -107,19 +107,34 @@
   .credits a { color: var(--accent); text-decoration: none; font-weight: 600; }
   .credits a:hover { text-decoration: underline; }
   @media (max-width: 560px) { .credits { margin-left: 0; } }
+  /* Phones have no room for the left column, so Developed by also shows as a line at the top left. */
+  .by-top { margin: 0 0 8px; font-size: 12px; color: var(--muted); text-align: left; }
+  .by-top a { color: var(--accent); font-weight: 600; text-decoration: none; }
+  @media (min-width: 760px) { .by-top { display: none; } }
+  /* On wide screens the footer sits in a sticky left column, so Developed by stays in view. */
+  @media (min-width: 760px) {
+    .wrap { max-width: 1180px; display: grid; grid-template-columns: 200px minmax(0, 880px); justify-content: center; column-gap: 32px; }
+    .main-col { grid-column: 2; grid-row: 1; min-width: 0; }
+    .site-foot { grid-column: 1; grid-row: 1; align-self: start; position: sticky; top: 24px; margin-top: 64px; flex-direction: column; flex-wrap: nowrap; }
+    .site-foot .foot-text { flex: none; }
+    .credits { margin-left: 0; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <nav class="site-links" aria-label="Site policies"><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="copyright.html">Copyright</a></nav>
-  <nav class="bar" aria-label="Site">
-    <a class="brand" href="./"><img src="logo.svg" alt=""><span>India &amp; Remote Tech Jobs</span></a>
-    <a class="btn" href="./">⌂ Home</a>
-    <button class="btn refresh" id="refresh" type="button"><span class="icon" aria-hidden="true">↻</span> Refresh</button>
-  </nav>
-  <p class="fresh" id="fresh">🔔 New jobs are added every few hours. <button type="button" id="refresh2">Refresh</button> to see the latest.</p>
+  <div class="main-col">
+    <p class="by-top">Developed by <a href="https://www.linkedin.com/in/shrivatrianimesh/" rel="noopener" target="_blank">Animesh Shrivatri</a> &amp; <a href="https://www.linkedin.com/in/sachin-singh-lodhi/" rel="noopener" target="_blank">Sachin Singh Lodhi</a></p>
+    <nav class="site-links" aria-label="Site policies"><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="copyright.html">Copyright</a></nav>
+    <nav class="bar" aria-label="Site">
+      <a class="brand" href="./"><img src="logo.svg" alt=""><span>Tech Jobs</span></a>
+      <a class="btn" href="./">⌂ Home</a>
+      <button class="btn refresh" id="refresh" type="button"><span class="icon" aria-hidden="true">↻</span> Refresh</button>
+    </nav>
+    <p class="fresh" id="fresh">🔔 New jobs are added every few hours. <button type="button" id="refresh2">Refresh</button> to see the latest.</p>
 
-  <main id="main"><p class="empty">Loading job…</p></main>
+    <main id="main"><p class="empty">Loading job…</p></main>
+  </div>
 
   <div class="site-foot">
     <div class="foot-text">
@@ -218,7 +233,7 @@ function render(j, salaries = []) {
   const match = closest(j, salaries);
   const link = safeUrl(j.url) ?? safeUrl(j.applyUrl);
   const onLinkedIn = /(^|\.)linkedin\.com$/.test(link ? new URL(link).hostname : '');
-  document.title = `${j.title} at ${j.company} · India & Remote Tech Jobs`;
+  document.title = `${j.title} at ${j.company} · Tech Jobs`;
   document.querySelector('meta[name="description"]').content =
     `${j.title} at ${j.company}${j.location ? ` in ${j.location}` : ''}. See the details and apply on LinkedIn.`;
 
