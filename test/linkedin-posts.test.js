@@ -95,4 +95,5 @@ test('the n8n workflow runs the same template check', async () => {
     const code = workflow.nodes.find((n) => n.name === 'Check against template').parameters.jsCode;
     assert.ok(code.includes(checkPost.toString()), 'copy checkPost() from src/linkedin-posts.js into the workflow');
     assert.ok(code.includes(plain.toString()), 'copy plain() from src/linkedin-posts.js into the workflow');
+    assert.equal(code.split('function plain(').length, 2, 'plain() is in the workflow once');
 });
