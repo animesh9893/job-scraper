@@ -88,10 +88,10 @@ Report back: `POST <siteUrl>/api/post-status` with `Authorization: Bearer <token
 
 1. 𝗚𝗼𝗼𝗴𝗹𝗲: Senior Software Engineer · 𝘉𝘦𝘯𝘨𝘢𝘭𝘶𝘳𝘶
 💰 ~₹45L/yr on Glassdoor
-🔗 https://www.linkedin.com/jobs/view/4123456789
+🔗 https://job-scraper-web-beryl.vercel.app/job.html?id=4123456789
 
 2. 𝗥𝗮𝘇𝗼𝗿𝗽𝗮𝘆: Backend Engineer (Golang) · 𝘉𝘦𝘯𝘨𝘢𝘭𝘶𝘳𝘶 (𝘙𝘦𝘮𝘰𝘵𝘦)
-🔗 https://www.linkedin.com/jobs/view/4123456790
+🔗 https://job-scraper-web-beryl.vercel.app/job.html?id=4123456790
 
 …
 

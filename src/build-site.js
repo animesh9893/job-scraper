@@ -30,7 +30,7 @@ const { rows: companies } = await store.query(
      FROM public_companies
      WHERE "isPremium" OR jobs > 0 ORDER BY jobs DESC LIMIT 500`);
 const { rows: salaries } = await store.query(
-    `SELECT "companySlug", title, currency, min::float AS min, median::float AS median, max::float AS max
+    `SELECT "companySlug", title, role, currency, min::float AS min, median::float AS median, max::float AS max
      FROM public_company_salaries WHERE "companySlug" = ANY($1) ORDER BY median DESC NULLS LAST, title`,
     [companies.map((c) => c.slug)]);
 await store.close();

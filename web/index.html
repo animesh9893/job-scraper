@@ -7,7 +7,7 @@
      crossorigin="anonymous"></script>
 <title>India &amp; Remote Tech Jobs</title>
 <meta name="description" content="Fresh frontend, backend, full stack and mobile developer jobs in India and remote, updated regularly.">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💼</text></svg>">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
 <style>
   :root {
     --bg: #f7f7f5; --surface: #ffffff; --text: #1d1d1b; --muted: #6b6b66; --border: #e4e4df;
@@ -29,6 +29,8 @@
   .wrap { max-width: 880px; margin: 0 auto; padding: 32px 16px 64px; }
   header h1 { margin: 0 0 4px; font-size: 26px; letter-spacing: -0.02em; }
   header p { margin: 0; color: var(--muted); }
+  header .brand { display: flex; align-items: center; gap: 12px; }
+  header .brand img { width: 40px; height: 40px; flex: none; }
 
   .controls { margin: 24px 0 8px; display: grid; gap: 12px; }
   .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
@@ -115,7 +117,7 @@
 <body>
 <div class="wrap">
   <header>
-    <h1 id="title">India &amp; Remote Tech Jobs</h1>
+    <div class="brand"><img src="logo.svg" alt=""><h1 id="title">India &amp; Remote Tech Jobs</h1></div>
     <p>Frontend, backend, full stack and mobile developer jobs in India and remote.</p>
   </header>
 
@@ -192,7 +194,7 @@ async function supabaseSource() {
   const db = createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY, { auth: { persistSession: false } });
   const run = async (query) => { const { data, count, error } = await query; if (error) throw error; return { data, count }; };
   return {
-    footer: 'Live listings, updated after every scrape. They link to the original job posts; apply there.',
+    footer: 'Live listings, updated after every scrape. Open a job for its details and the link to apply on LinkedIn.',
     categories: async () => (await run(db.from('public_categories').select('slug, label').order('sort_order').order('slug'))).data,
     counts: async () => (await run(db.from('public_job_counts').select('*'))).data,
     // Premium companies plus the ones with the most listed jobs, for the chips and the search suggestions.
@@ -229,7 +231,7 @@ async function jsonSource() {
   }
   return {
     title: data.title,
-    footer: `Updated ${new Date(data.generatedAt).toLocaleString()}. Listings link to the original job posts; apply there.`,
+    footer: `Updated ${new Date(data.generatedAt).toLocaleString()}. Open a job for its details and the link to apply on LinkedIn.`,
     categories: async () => data.categories ?? [...new Set(data.jobs.map((j) => j.category).filter(Boolean))].map((slug) => ({ slug, label: slug })),
     counts: async () => [...tally.values()],
     companies: async () => data.companies ?? [],
@@ -350,8 +352,11 @@ function jobItem(j) {
   return item;
 }
 
+// Each card opens the job's own page (job.html), which has the description and the button to apply on LinkedIn.
+const jobPage = (j) => j.id != null && `job.html?id=${encodeURIComponent(j.id)}`;
+
 function jobCard(j) {
-  const url = safeUrl(j.url);
+  const url = jobPage(j);
   const badges = [
     j.category && el('span', { className: 'badge cat', textContent: LABEL[j.category] ?? j.category }),
     j.workplace && el('span', { className: `badge ${j.workplace}`, textContent: j.workplace === 'remote' ? 'Remote' : 'Hybrid' }),
@@ -361,7 +366,7 @@ function jobCard(j) {
   ];
   return el('li', { className: 'job' },
     el('div', {},
-      el('h2', {}, url ? el('a', { href: url, target: '_blank', rel: 'noopener nofollow', textContent: j.title }) : j.title),
+      el('h2', {}, url ? el('a', { href: url, textContent: j.title }) : j.title),
       el('div', { className: 'meta' },
         j.company && (j.companySlug
           ? el('button', { className: 'company', type: 'button', title: `Only jobs at ${j.company}`,
@@ -373,7 +378,7 @@ function jobCard(j) {
       el('div', { className: 'badges' }, ...badges),
     ),
     el('span', { className: 'when', textContent: fetchedAgo(j.firstSeenAt), title: new Date(j.firstSeenAt).toLocaleString() }),
-    url && el('span', { className: 'apply', ariaHidden: 'true', textContent: 'View job ↗' }),
+    url && el('span', { className: 'apply', ariaHidden: 'true', textContent: 'View job →' }),
   );
 }
 

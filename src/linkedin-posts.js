@@ -4,6 +4,9 @@
 // Usage: node src/linkedin-posts.js   (needs DATABASE_URL; without a person's webhook secret their post is only
 // shown on the page)
 import { pathToFileURL } from 'node:url';
+import { payRoles } from '../web/pay-roles.js';
+
+export { payRoles };
 
 const MAX_CHARS = 3000;   // LinkedIn's limit for a post
 
@@ -80,31 +83,6 @@ export function postHashtags(jobs, hashtags = [], max = 10) {
     ].map(hashtag).filter(Boolean))].slice(0, max);
 }
 
-// The Glassdoor roles (config salaries.roles) that fit a job, best first. Interns get none: a full-time median
-// would mislead. Managers, product, design and data roles don't fall back to software engineer pay.
-export function payRoles({ title, role, level }) {
-    if (level === 'intern') return [];
-    const t = String(title ?? '').toLowerCase();
-    const senior = ['senior', 'lead', 'staff', 'principal'].includes(level);
-    const byLevel = { principal: 'Principal Software Engineer', staff: 'Staff Software Engineer',
-        lead: 'Senior Software Engineer', senior: 'Senior Software Engineer' }[level];
-    const byRole = {
-        manager: ['Engineering Manager'],
-        product: [senior ? 'Senior Product Manager' : 'Product Manager', 'Product Manager'],
-        design: ['Product Designer'],
-        ml: ['Machine Learning Engineer', 'Data Scientist'],
-        data: [/scientist/.test(t) ? 'Data Scientist' : /analyst/.test(t) ? 'Data Analyst' : 'Data Engineer'],
-        devops: [/reliability|\bsre\b/.test(t) ? 'Site Reliability Engineer' : 'DevOps Engineer', 'Site Reliability Engineer'],
-        qa: ['QA Engineer'],
-        mobile: [/android/.test(t) ? 'Android Developer' : /\bios\b/.test(t) ? 'iOS Developer' : 'Mobile Developer', 'Mobile Developer'],
-        fullstack: ['Full Stack Developer'],
-        frontend: ['Frontend Developer'],
-        backend: ['Backend Developer'],
-    }[role] ?? [];
-    const engineering = !['manager', 'product', 'design', 'data'].includes(role);
-    return [...new Set([...(engineering && byLevel ? [byLevel] : []), ...byRole, ...(engineering ? ['Software Engineer'] : [])])];
-}
-
 // 2450000 INR → "₹24L", 850000 → "₹8.5L"; 132000 USD → "$132k".
 function money(amount, currency) {
     if (currency === 'INR') return `₹${amount >= 1e6 ? Math.round(amount / 1e5) : Math.round(amount / 1e4) / 10}L`;
@@ -129,8 +107,12 @@ export function payFor(job, salaries = []) {
     return null;
 }
 
-/** The job's own page: a short linkedin.com/jobs/view/<id> link when it is a LinkedIn job, else its apply link. */
-export function jobLink({ url, apply_url: applyUrl }) {
+/**
+ * The link for a job in a post: its page on our site (/job.html?id=<job id>, with an "Apply on LinkedIn" button)
+ * when siteUrl is given, else a short linkedin.com/jobs/view/<id> link when it is a LinkedIn job, else its apply link.
+ */
+export function jobLink({ job_id: jobId, url, apply_url: applyUrl }, siteUrl) {
+    if (siteUrl && jobId) return `${siteUrl.replace(/\/$/, '')}/job.html?id=${encodeURIComponent(jobId)}`;
     const id = String(url ?? '').match(/linkedin\.com\/jobs\/view\/(?:[^/?#]*-)?(\d{6,})/)?.[1];
     if (id) return `https://www.linkedin.com/jobs/view/${id}`;
     return /^https?:\/\//.test(url ?? '') ? url : /^https?:\/\//.test(applyUrl ?? '') ? applyUrl : null;
@@ -138,7 +120,7 @@ export function jobLink({ url, apply_url: applyUrl }) {
 
 /**
  * The post text: a bold heading; for each job a numbered line (company in bold, place in italics), its pay when
- * known (job.pay, see payFor) and its link; the most named tech; a link to the post's /alert.html page; hashtags.
+ * known (job.pay, see payFor) and its link to the job's page on the site (see jobLink); the most named tech; a link to the post's /alert.html page; hashtags.
  * Job titles and hashtags stay plain so LinkedIn search finds them.
  */
 export function buildPost({ id, jobs, siteUrl, hashtags = [], maxHashtags = 10 }) {
@@ -151,7 +133,7 @@ export function buildPost({ id, jobs, siteUrl, hashtags = [], maxHashtags = 10 }
         ...jobs.flatMap((j, i) => [
             `${i + 1}. ${bold(j.company)}: ${j.title}${where(j) ? ` · ${italic(where(j))}` : ''}`,
             ...(j.pay ? [`💰 ${j.pay}`] : []),
-            ...(jobLink(j) ? [`🔗 ${jobLink(j)}`] : []),
+            ...(jobLink(j, siteUrl) ? [`🔗 ${jobLink(j, siteUrl)}`] : []),
             '',
         ]),
         ...(top.length ? [`🔥 ${bold('In demand:')} ${top.join(', ')}`, ''] : []),

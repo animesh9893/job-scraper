@@ -195,8 +195,8 @@ BEGIN
 END $$;
 
 -- The website reads only these views, with Supabase's public anon key. The base tables have RLS on
--- and no policies, so that key can't read raw data, descriptions or runs. The view runs as its
--- owner, which is why it can still read jobs.
+-- and no policies, so that key can't read raw data, job-poster details or runs (descriptions only through
+-- public_job, for the job pages). The views run as their owner, which is why they can still read jobs.
 ALTER TABLE jobs ENABLE ROW LEVEL SECURITY;
 CREATE OR REPLACE VIEW public_jobs AS
     SELECT j.job_id AS id, j.title, j.company, j.location, j.category, j.workplace, j.url,
@@ -205,6 +205,16 @@ CREATE OR REPLACE VIEW public_jobs AS
            COALESCE(c.is_premium, false) AS "companyPremium", j.role, j.level, j.tags
     FROM jobs j LEFT JOIN companies c ON c.slug = j.company_slug
     WHERE j.status <> 'skipped' AND j.first_seen_at > now() - interval '30 days';
+-- One job for its page on the site (web/job.html, linked from the board and LinkedIn posts): the listing with its
+-- description, pay and company logo. No 30-day cut-off, so links in older posts keep working.
+CREATE OR REPLACE VIEW public_job AS
+    SELECT j.job_id AS id, j.title, j.company, j.location, j.category, j.workplace, j.url, j.apply_url AS "applyUrl",
+           j.salary, j.description, j.posted_at AS "postedAt", j.employment_type AS "employmentType", j.seniority,
+           j.first_seen_at AS "firstSeenAt", j.company_slug AS "companySlug",
+           COALESCE(c.is_premium, false) AS "companyPremium", c.logo_url AS "companyLogo", c.domain AS "companyDomain",
+           j.role, j.level, j.tags
+    FROM jobs j LEFT JOIN companies c ON c.slug = j.company_slug
+    WHERE j.status <> 'skipped';
 CREATE OR REPLACE VIEW public_categories AS
     SELECT slug, label, sort_order FROM categories;
 -- Tab counts, so the site doesn't have to download every job to count them.
@@ -230,7 +240,8 @@ CREATE OR REPLACE VIEW public_companies AS
 CREATE OR REPLACE VIEW public_company_salaries AS
     SELECT company_slug AS "companySlug", job_title AS title, currency,
            min_annual AS min, median_annual AS median, max_annual AS max,
-           min_usd AS "minUsd", median_usd AS "medianUsd", max_usd AS "maxUsd", fetched_at AS "fetchedAt"
+           min_usd AS "minUsd", median_usd AS "medianUsd", max_usd AS "maxUsd", fetched_at AS "fetchedAt",
+           query AS role   -- the role (salaries.roles) it was found by, for matching a job (web/pay-roles.js)
     FROM company_salaries;
 
 -- Company index, 0 to 100, for ranking companies in LinkedIn posts and on the site:
@@ -338,9 +349,9 @@ DO $$ BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
         REVOKE ALL ON jobs, categories, searches, companies, company_salaries, fx_rates FROM anon, authenticated;
         REVOKE ALL ON posts, post_jobs, company_index, post_candidates FROM anon, authenticated;
-        REVOKE ALL ON public_jobs, public_categories, public_job_counts, public_companies, public_company_salaries,
+        REVOKE ALL ON public_jobs, public_job, public_categories, public_job_counts, public_companies, public_company_salaries,
                       public_alert_jobs, public_linkedin_posts, public_post_images FROM anon, authenticated;
-        GRANT SELECT ON public_jobs, public_categories, public_job_counts, public_companies, public_company_salaries,
+        GRANT SELECT ON public_jobs, public_job, public_categories, public_job_counts, public_companies, public_company_salaries,
                         public_alert_jobs, public_linkedin_posts, public_post_images TO anon, authenticated;
     END IF;
 END $$;
