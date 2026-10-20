@@ -23,15 +23,16 @@ The run page shows a results table (found / new / filtered / cost per search).
 Browse the data in Supabase → **Table Editor** → `jobs`, `searches`, `categories` and `runs`.
 Tables are created automatically on the first run.
 
-It also runs on its own every 2 hours (`schedule:` in `.github/workflows/scrape.yml`), each time
-the premium searches plus the next `searchesPerRun` searches in the rotation.
+It runs every 2 hours when n8n starts it (see Schedule below), each time the premium searches plus
+the next `searchesPerRun` searches in the rotation. GitHub's own timer is off.
 
 ### Schedule
 
-GitHub's schedule is best effort. Runs are queued behind everyone else's, so they often start 1 to
+GitHub's own schedule was turned off because it is best effort. Runs are queued behind everyone else's, so they often start 1 to
 2.5 hours late, and some are skipped (worst at the top of the hour, so the cron uses :17). The
 concurrency group keeps at most one run waiting. For runs on time, trigger the workflow from an outside
-scheduler (n8n's Schedule node, cron-job.org, Railway cron) every 2 hours instead:
+scheduler (n8n's Schedule node, cron-job.org, Railway cron) every 2 hours. This project uses an n8n
+workflow (Schedule Trigger every 2 hours, then an HTTP Request) that sends:
 
 ```
 POST https://api.github.com/repos/<owner>/<repo>/actions/workflows/scrape.yml/dispatches
@@ -41,7 +42,8 @@ Accept: application/vnd.github+json
 {"ref": "main"}
 ```
 
-Then comment out `schedule:` so the two don't double up.
+Only one scheduler should start runs. If you bring back a `schedule:` in `scrape.yml`, turn the
+n8n one off so runs don't double up (and cost twice).
 
 ## Several Apify accounts
 
@@ -256,14 +258,14 @@ first three tags on each job.
 
 ## Workflows
 
-- `scrape.yml`: "Run workflow" button and a 2-hourly schedule that scrapes and stores jobs, then
+- `scrape.yml`: "Run workflow" button (and n8n's 2-hourly dispatch) that scrapes and stores jobs, then
   publishes the job board (when `PUBLISH_SITE=true`).
 - `ci.yml`: on every push, checks syntax and that `config.yaml` loads.
 
 ## Keeping the public repo safe
 
-The workflows that use secrets (Scrape jobs, Manage searches) only run on `main`, and only on a
-schedule or from the Run workflow button, which needs write access. CI runs on pull requests with a
+The workflows that use secrets (Scrape jobs, Manage searches) only run on `main`, and only from the
+Run workflow button or its API, which needs write access. CI runs on pull requests with a
 read-only token and no secrets, so a pull request from a fork can't read `DATABASE_URL` or the
 Apify tokens, even if it changes a workflow file.
 
