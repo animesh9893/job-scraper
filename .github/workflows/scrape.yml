@@ -15,10 +15,8 @@ on:
         description: 'yes = write LinkedIn posts now, even if the last one is newer than linkedin.everyHours'
         required: false
         default: ''
-  schedule:                     # every 2 hours: due premium searches plus the next searchesPerRun in the rotation
-    # Off the top of the hour: GitHub delays or silently drops many scheduled runs at :00. Even so, GitHub's
-    # schedule is best effort: runs often start 1 to 2.5 hours late or are skipped (README → Schedule).
-    - cron: '17 */2 * * *'
+  # No schedule: here. n8n's "Start scrape every 2 hours" workflow starts runs through workflow_dispatch,
+  # on time and without doubling up with GitHub's best-effort timer (README → Schedule).
 
 concurrency:
   group: scrape                 # never run two scrapes at once
