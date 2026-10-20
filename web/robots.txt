@@ -1,0 +1,8 @@
+# Let the AdSense crawler see every page so it can check the site and match ads.
+User-agent: Mediapartners-Google
+Allow: /
+
+User-agent: *
+Allow: /
+Disallow: /posts.html
+Disallow: /api/
