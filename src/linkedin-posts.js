@@ -251,7 +251,7 @@ async function main() {
             let jobs = split.get(person.id);
             const { rows: [last] } = await store.query(
                 `SELECT EXTRACT(EPOCH FROM now() - max(created_at)) / 3600 AS hours FROM posts WHERE person = $1`, [person.id]);
-            if (last?.hours != null && last.hours < cfg.everyHours - 0.5) {   // half an hour of slack: scrape start times drift
+            if (process.env.FORCE_POSTS !== 'yes' && last?.hours != null && last.hours < cfg.everyHours - 0.5) {   // half an hour of slack: scrape start times drift
                 console.log(`  ${person.id}: last post ${Number(last.hours).toFixed(1)}h ago, next after ${cfg.everyHours}h`);
                 continue;
             }

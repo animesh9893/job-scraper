@@ -11,6 +11,10 @@ on:
         description: 'Companies to fetch Glassdoor salaries for (blank = salaries.companiesPerRun, a number, or all = every company due)'
         required: false
         default: ''
+      force_posts:
+        description: 'yes = write LinkedIn posts now, even if the last one is newer than linkedin.everyHours'
+        required: false
+        default: ''
   schedule:                     # every 2 hours: due premium searches plus the next searchesPerRun in the rotation
     # Off the top of the hour: GitHub delays or silently drops many scheduled runs at :00. Even so, GitHub's
     # schedule is best effort: runs often start 1 to 2.5 hours late or are skipped (README → Schedule).
@@ -53,6 +57,7 @@ jobs:
         if: ${{ !cancelled() }}   # one post per person in config linkedin.people; see n8n/README.md
         run: node src/linkedin-posts.js
         env:
+          FORCE_POSTS: ${{ inputs.force_posts }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           N8N_WEBHOOK_ANIMESH: ${{ secrets.N8N_WEBHOOK_ANIMESH }}
           N8N_WEBHOOK_SACHIN: ${{ secrets.N8N_WEBHOOK_SACHIN }}
