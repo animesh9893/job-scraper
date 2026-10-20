@@ -240,7 +240,8 @@ CREATE OR REPLACE VIEW public_companies AS
 CREATE OR REPLACE VIEW public_company_salaries AS
     SELECT company_slug AS "companySlug", job_title AS title, currency,
            min_annual AS min, median_annual AS median, max_annual AS max,
-           min_usd AS "minUsd", median_usd AS "medianUsd", max_usd AS "maxUsd", fetched_at AS "fetchedAt"
+           min_usd AS "minUsd", median_usd AS "medianUsd", max_usd AS "maxUsd", fetched_at AS "fetchedAt",
+           query AS role   -- the role (salaries.roles) it was found by, for matching a job (web/pay-roles.js)
     FROM company_salaries;
 
 -- Company index, 0 to 100, for ranking companies in LinkedIn posts and on the site:

@@ -70,6 +70,14 @@
   .desc.clamped { max-height: 360px; overflow: hidden; -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
   .more-btn { margin-top: 8px; }
 
+  .salaries table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .salaries td { padding: 8px 0; border-top: 1px solid var(--border); vertical-align: top; }
+  .salaries td + td { text-align: right; padding-left: 12px; white-space: nowrap; font-weight: 600; }
+  .salaries .mid { color: var(--muted); font-size: 12px; font-weight: 400; }
+  .salaries tr.match td { color: var(--remote); }
+  .salaries .tag { display: inline-block; margin-left: 6px; font-size: 11px; padding: 1px 6px; border-radius: 6px; background: var(--remote-soft); color: var(--remote); font-weight: 600; }
+  .salaries .src { color: var(--muted); font-size: 12px; margin-top: 6px; }
+
   ul.others { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
   .others a { display: flex; gap: 10px; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; color: var(--text); text-decoration: none; }
   .others a:hover { border-color: var(--accent); }
@@ -105,7 +113,9 @@
 <script src="config.js"></script>
 <script type="module">
 // One job's page (?id=<job id>, linked from the board, hiring alerts and LinkedIn posts): its details and
-// description from the view public_job, a button to apply on LinkedIn, and the newest other jobs.
+// description from the view public_job, its company's Glassdoor salaries, a button to apply on LinkedIn, and the
+// newest other jobs.
+import { payRoles } from './pay-roles.js';
 const $ = (id) => document.getElementById(id);
 const el = (tag, props = {}, ...children) => {
   const node = Object.assign(document.createElement(tag), props);
@@ -141,7 +151,47 @@ function companyLogo(name, logoUrl, domain) {
   return el('img', { className: 'company-logo', src, alt: '', referrerPolicy: 'no-referrer', onerror() { this.replaceWith(initials); } });
 }
 
-function render(j) {
+/** Yearly pay, short: ₹12L and ₹1.2Cr for rupees, $150K elsewhere (as on the board). */
+function money(n, currency) {
+  if (n == null) return '';
+  if (currency === 'INR') {
+    const [v, unit] = n >= 1e7 ? [n / 1e7, 'Cr'] : n >= 1e5 ? [n / 1e5, 'L'] : [n / 1e3, 'K'];
+    return `₹${v.toFixed(v < 10 ? 1 : 0).replace(/\.0$/, '')}${unit}`;
+  }
+  try {
+    return new Intl.NumberFormat('en', { style: 'currency', currency, notation: 'compact', maximumFractionDigits: 1 }).format(n);
+  } catch {
+    return `${currency} ${Math.round(n).toLocaleString()}`;
+  }
+}
+const range = (lo, hi, currency) => (lo === hi || hi == null ? money(lo, currency) : `${money(lo, currency)} – ${money(hi, currency)}`);
+
+/** The company's Glassdoor row closest to this job (same roles, same order as the LinkedIn posts), or null. */
+function closest(j, salaries) {
+  for (const role of payRoles(j)) {
+    const row = salaries.find((s) => (s.role ?? s.title) === role && s.median > 0);
+    if (row) return row;
+  }
+  return null;
+}
+
+/** The per-role table, the closest role first and marked. */
+function salarySection(j, salaries, match) {
+  if (!salaries.length) return null;
+  const rows = [...(match ? [match] : []), ...salaries.filter((s) => s !== match)];
+  const SHOWN = 6;
+  return el('section', { className: 'salaries' },
+    el('h2', { textContent: `Salaries at ${j.company} on Glassdoor` }),
+    el('table', {}, el('tbody', {}, ...rows.map((r, i) => el('tr', { className: r === match ? 'match' : '', hidden: i >= SHOWN },
+      el('td', {}, r.title, r === match && el('span', { className: 'tag', textContent: 'Closest to this job' })),
+      el('td', {}, money(r.median, r.currency), el('div', { className: 'mid', textContent: range(r.min, r.max, r.currency) })))))),
+    rows.length > SHOWN && el('button', { className: 'btn more-btn', type: 'button', textContent: `Show all ${rows.length} roles`,
+      onclick() { this.parentNode.querySelectorAll('tr[hidden]').forEach((tr) => { tr.hidden = false; }); this.remove(); } }),
+    el('div', { className: 'src', textContent: 'Yearly total pay per Glassdoor: median, and the 10th to 90th percentile below it.' }));
+}
+
+function render(j, salaries = []) {
+  const match = closest(j, salaries);
   const link = safeUrl(j.url) ?? safeUrl(j.applyUrl);
   const onLinkedIn = /(^|\.)linkedin\.com$/.test(link ? new URL(link).hostname : '');
   document.title = `${j.title} at ${j.company} · India & Remote Tech Jobs`;
@@ -149,7 +199,7 @@ function render(j) {
     `${j.title} at ${j.company}${j.location ? ` in ${j.location}` : ''}. See the details and apply on LinkedIn.`;
 
   const facts = [
-    ['Pay', j.salary],
+    ['Pay', j.salary || (match && `~${money(match.median, match.currency)}/yr (Glassdoor)`)],
     ['Experience', j.seniority !== 'Not Applicable' && j.seniority],
     ['Job type', j.employmentType],
     ['Found', j.firstSeenAt && `${ago(j.firstSeenAt)} · ${new Date(j.firstSeenAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`],
@@ -175,6 +225,7 @@ function render(j) {
     el('div', { className: 'actions' },
       apply ?? el('span', { className: 'note', textContent: 'This listing has no link to apply.' }),
       apply && el('span', { className: 'note', textContent: onLinkedIn ? 'Opens the job on LinkedIn in a new tab.' : 'Opens the job post in a new tab.' })),
+    salarySection(j, salaries, match),
     desc && el('h2', { textContent: 'About the job' }),
     desc,
     desc && j.description.length > 1200 && el('button', { className: 'btn more-btn', type: 'button', textContent: 'Show full description',
@@ -217,7 +268,13 @@ try {
       if (error) throw error;
       job = data[0] ?? null;
     }
-    job ? render(job) : notFound();
+    let salaries = [];
+    if (job?.companySlug) {
+      const { data } = await db.from('public_company_salaries').select('*').eq('companySlug', job.companySlug)
+        .order('median', { ascending: false });
+      salaries = (data ?? []).map((s) => ({ ...s, min: Number(s.min), median: Number(s.median), max: Number(s.max) }));
+    }
+    job ? render(job, salaries) : notFound();
     const { data: others } = await db.from('public_jobs').select('id,title,company,location,companySlug,firstSeenAt')
       .neq('id', id ?? '').order('firstSeenAt', { ascending: false }).limit(OTHERS);
     const slugs = [...new Set((others ?? []).map((o) => o.companySlug).filter(Boolean))];
@@ -230,7 +287,8 @@ try {
     const companies = new Map((data.companies ?? []).map((c) => [c.slug, c]));
     const job = data.jobs.find((j) => String(j.id) === id);
     const c = job && companies.get(job.companySlug);
-    job ? render({ ...job, companyLogo: c?.logoUrl, companyDomain: c?.domain }) : notFound();
+    const salaries = (data.salaries ?? []).filter((s) => job && s.companySlug === job.companySlug);
+    job ? render({ ...job, companyLogo: c?.logoUrl, companyDomain: c?.domain }, salaries) : notFound();
     renderOthers(data.jobs.filter((j) => String(j.id) !== id).slice(0, OTHERS), companies);
   }
 } catch {

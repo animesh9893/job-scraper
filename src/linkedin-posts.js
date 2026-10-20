@@ -4,6 +4,9 @@
 // Usage: node src/linkedin-posts.js   (needs DATABASE_URL; without a person's webhook secret their post is only
 // shown on the page)
 import { pathToFileURL } from 'node:url';
+import { payRoles } from '../web/pay-roles.js';
+
+export { payRoles };
 
 const MAX_CHARS = 3000;   // LinkedIn's limit for a post
 
@@ -78,31 +81,6 @@ export function postHashtags(jobs, hashtags = [], max = 10) {
         ...mostCommon(cities, 2).map((c) => `${hashtag(c)}jobs`),
         ...(remote ? ['remotejobs'] : []),
     ].map(hashtag).filter(Boolean))].slice(0, max);
-}
-
-// The Glassdoor roles (config salaries.roles) that fit a job, best first. Interns get none: a full-time median
-// would mislead. Managers, product, design and data roles don't fall back to software engineer pay.
-export function payRoles({ title, role, level }) {
-    if (level === 'intern') return [];
-    const t = String(title ?? '').toLowerCase();
-    const senior = ['senior', 'lead', 'staff', 'principal'].includes(level);
-    const byLevel = { principal: 'Principal Software Engineer', staff: 'Staff Software Engineer',
-        lead: 'Senior Software Engineer', senior: 'Senior Software Engineer' }[level];
-    const byRole = {
-        manager: ['Engineering Manager'],
-        product: [senior ? 'Senior Product Manager' : 'Product Manager', 'Product Manager'],
-        design: ['Product Designer'],
-        ml: ['Machine Learning Engineer', 'Data Scientist'],
-        data: [/scientist/.test(t) ? 'Data Scientist' : /analyst/.test(t) ? 'Data Analyst' : 'Data Engineer'],
-        devops: [/reliability|\bsre\b/.test(t) ? 'Site Reliability Engineer' : 'DevOps Engineer', 'Site Reliability Engineer'],
-        qa: ['QA Engineer'],
-        mobile: [/android/.test(t) ? 'Android Developer' : /\bios\b/.test(t) ? 'iOS Developer' : 'Mobile Developer', 'Mobile Developer'],
-        fullstack: ['Full Stack Developer'],
-        frontend: ['Frontend Developer'],
-        backend: ['Backend Developer'],
-    }[role] ?? [];
-    const engineering = !['manager', 'product', 'design', 'data'].includes(role);
-    return [...new Set([...(engineering && byLevel ? [byLevel] : []), ...byRole, ...(engineering ? ['Software Engineer'] : [])])];
 }
 
 // 2450000 INR → "₹24L", 850000 → "₹8.5L"; 132000 USD → "$132k".
