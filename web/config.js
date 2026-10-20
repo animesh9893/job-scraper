@@ -4,3 +4,7 @@
 // Never put the service_role / secret key here.
 window.SUPABASE_URL = 'https://yhhcjffgtdcfvkpxppzb.supabase.co';
 window.SUPABASE_ANON_KEY = 'sb_publishable_qDolDAzXkoBaZWJmd-yLKA_ySFQSx9i';
+// SHA-256 of the password for the private posts page (posts.html). It only keeps the page out of casual view:
+// the posts themselves are readable with the public key above. New password:
+//   printf %s 'new password' | sha256sum
+window.POSTS_PASSWORD_SHA256 = 'f073146294b84e066865d520ec003bbe804da04b7f53efa416c0965183d92ffc';

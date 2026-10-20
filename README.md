@@ -212,8 +212,13 @@ first three tags on each job.
   last 7 days and best median pay. The weights are written next to the view in `src/db.js`.
 - `post_candidates` (view): jobs from the last 3 days not posted yet, at most 2 per company, scored by company
   index plus freshness.
-- `posts` and `post_jobs`: LinkedIn hiring-alert posts and their jobs, written by n8n through `draft_post()`
-  and `finish_post()`. Setup: [n8n/README.md](n8n/README.md).
+- `posts` and `post_jobs`: LinkedIn hiring-alert posts and their jobs. After each scrape,
+  `src/linkedin-posts.js` splits the best new jobs between the people in `config.yaml` → `linkedin.people`
+  (each gets different jobs) and writes one post for each, then pings each person's n8n to email it for approval
+  and post it. Setup and the n8n workflow: [n8n/README.md](n8n/README.md).
+- `web/posts.html`: password page showing everyone's posts with a copy button. The password is checked in the
+  browser only (`POSTS_PASSWORD_SHA256` in `web/config.js`); the posts are public data.
+- `web/api/post-status.mjs`: where n8n reports a post as posted or declined.
 - `web/alert.html?id=<post id>`: the page a post links to, listing its openings.
 
 ## Tables
@@ -230,7 +235,7 @@ first three tags on each job.
 - `fx_rates`: USD value of each currency, refreshed daily when salaries are fetched.
 - `posts`, `post_jobs`: LinkedIn hiring-alert posts and the jobs in each.
 - Views for the site (the only things the public key can read): `public_jobs`, `public_categories`,
-  `public_job_counts`, `public_companies`, `public_company_salaries`, `public_alert_jobs`.
+  `public_job_counts`, `public_companies`, `public_company_salaries`, `public_alert_jobs`, `public_linkedin_posts`.
 
 ## Workflows
 

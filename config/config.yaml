@@ -86,3 +86,18 @@ site:
   title: India & Remote Tech Jobs
   maxAgeDays: 30        # only list jobs first seen in the last N days
   maxJobs: 1000
+
+# LinkedIn hiring-alert posts (src/linkedin-posts.js, after each scrape). The best new jobs are split between
+# these people, one post each with different jobs, shown on the private page /posts.html. Then each person's n8n
+# is pinged (GitHub secret N8N_WEBHOOK_<ID>, e.g. N8N_WEBHOOK_ANIMESH) to email the post for approval and
+# publish it. Setup: n8n/README.md.
+linkedin:
+  siteUrl: https://job-scraper-web.vercel.app   # the job board; each post links to its /alert.html page
+  jobsPerPost: 6
+  minJobs: 3            # no post for a person who would get fewer new jobs than this
+  hashtags: [hiring, softwareengineering, techjobs]
+  people:
+    - id: animesh
+      name: Animesh
+    - id: sachin
+      name: Sachin

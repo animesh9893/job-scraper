@@ -1,0 +1,454 @@
+{
+  "name": "LinkedIn hiring alert",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "hiring-alert",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "id": "1f059cb5-774d-40d5-b95b-4048f317d611",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "a5b3c040-42d1-48c2-a710-6ff778cc1886"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "717e8975-c63d-4c5b-9c3d-1498dbee3b69",
+              "name": "person",
+              "value": "animesh",
+              "type": "string"
+            },
+            {
+              "id": "abb4e120-a502-46c9-8ad5-84fe3c4c26f7",
+              "name": "siteUrl",
+              "value": "https://job-scraper-web.vercel.app",
+              "type": "string"
+            },
+            {
+              "id": "0db5856d-4d59-4bed-b2d2-7dbc148b8bea",
+              "name": "supabaseUrl",
+              "value": "https://yhhcjffgtdcfvkpxppzb.supabase.co",
+              "type": "string"
+            },
+            {
+              "id": "810460da-9c5e-4df3-ab5d-c104fc663af9",
+              "name": "supabaseKey",
+              "value": "sb_publishable_qDolDAzXkoBaZWJmd-yLKA_ySFQSx9i",
+              "type": "string"
+            },
+            {
+              "id": "9bf79611-3ad4-4baf-9c06-1ecd9afa978b",
+              "name": "approvalEmail",
+              "value": "you@example.com",
+              "type": "string"
+            },
+            {
+              "id": "178513a0-8eef-4f62-a915-42d901b01c6f",
+              "name": "token",
+              "value": "same as GitHub secret POST_TOKEN_<ID>",
+              "type": "string"
+            },
+            {
+              "id": "49a8ca90-2200-4abd-bac4-a167faf57091",
+              "name": "postId",
+              "value": "={{ $json.body.postId }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e19038ed-8ff8-4da8-9a1f-5fd3207891f5",
+      "name": "Settings",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Settings').first().json.supabaseUrl }}/rest/v1/public_linkedin_posts",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "=eq.{{ $('Settings').first().json.postId }}"
+            },
+            {
+              "name": "person",
+              "value": "=eq.{{ $('Settings').first().json.person }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Settings').first().json.supabaseKey }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3ba3c6f3-0763-4672-9b03-6c507cae00eb",
+      "name": "Fetch post",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        300
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Same checks as checkPost() in src/linkedin-posts.js; keep the two in step.\nconst MAX_CHARS = 3000;\nfunction checkPost(body) {\n    const problems = [];\n    const text = String(body ?? '');\n    const lines = text.split('\\n');\n    if (!/^🚀 Hiring alert: \\d+ new opening/.test(lines[0] ?? '')) problems.push('first line is not \"🚀 Hiring alert: N new openings…\"');\n    if (text.length > MAX_CHARS) problems.push(`${text.length} characters, LinkedIn allows ${MAX_CHARS}`);\n    const jobs = lines.filter((l) => /^\\d+\\. .+: .+/.test(l)).length;\n    if (jobs < 1 || jobs > 15) problems.push(`${jobs} job lines, expected 1 to 15`);\n    const links = text.match(/https?:\\/\\/\\S+/g) ?? [];\n    if (links.length !== 1 || !/\\/alert\\.html\\?id=\\d+$/.test(links[0])) problems.push('needs exactly one link, to /alert.html?id=…');\n    const tags = (lines.at(-1) ?? '').match(/#\\w+/g) ?? [];\n    if (tags.length < 1 || tags.length > 5) problems.push(`${tags.length} hashtags on the last line, expected 1 to 5`);\n    if (/\\b(undefined|null|NaN)\\b/.test(text)) problems.push('contains \"undefined\", \"null\" or \"NaN\"');\n    return problems;\n}\n\nconst post = $input.first()?.json ?? {};\nconst problems = post.id ? checkPost(post.body) : ['post not found'];\nif (post.id && post.status !== 'draft') problems.push(`post is already ${post.status}`);\nreturn [{ json: { id: post.id ?? $('Settings').first().json.postId, body: post.body ?? '', jobs: post.jobs, valid: problems.length === 0, problems }, pairedItem: { item: 0 } }];"
+      },
+      "id": "c48f14eb-9a2b-4e7e-8fc1-14ced07af69c",
+      "name": "Check against template",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f3735aaa-c7f2-4823-be2d-e203a13492a5",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "6f32d0b2-ddb2-4252-a1c4-fb2c4556104b",
+      "name": "Matches template?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "sendTo": "={{ $('Settings').first().json.approvalEmail }}",
+        "subject": "=LinkedIn post {{ $json.id }}: {{ $json.jobs }} jobs, post it?",
+        "message": "={{ $json.body }}",
+        "approvalOptions": {
+          "values": {
+            "approvalType": "double",
+            "approveLabel": "Approve and post",
+            "disapproveLabel": "Decline"
+          }
+        },
+        "options": {
+          "limitWaitTime": {
+            "values": {
+              "limitType": "afterTimeInterval",
+              "resumeAmount": 2,
+              "resumeUnit": "days"
+            }
+          }
+        }
+      },
+      "id": "8ec8ddb3-82eb-47c6-8ac0-7040b06d2123",
+      "name": "Ask for approval",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1100,
+        200
+      ],
+      "webhookId": "88ee1782-4667-4658-bd3b-9c031b7a437d"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Settings').first().json.approvalEmail }}",
+        "subject": "=LinkedIn post {{ $json.id }} doesn't match the template",
+        "emailType": "text",
+        "message": "=Not sent for approval:\n{{ $json.problems.join('\\n') }}\n\n{{ $json.body }}",
+        "options": {}
+      },
+      "id": "d886e040-f1db-4b28-a82b-8cbc28173842",
+      "name": "Report failed check",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1100,
+        420
+      ],
+      "webhookId": "904e5a1e-ae28-4adb-a324-3e15533674cb"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "2b61ea9d-f881-47fd-b728-1c1ea718c740",
+              "leftValue": "={{ $json.data.approved }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "311dfa4e-17b7-4653-9b39-907645edf908",
+      "name": "Approved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1320,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "postAs": "person",
+        "person": "",
+        "text": "={{ $node['Check against template'].json.body }}",
+        "shareMediaCategory": "NONE",
+        "additionalFields": {}
+      },
+      "id": "8917d3fa-405c-4fde-87b3-f3eff8502d91",
+      "name": "Post to LinkedIn",
+      "type": "n8n-nodes-base.linkedIn",
+      "typeVersion": 1,
+      "position": [
+        1540,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Settings').first().json.siteUrl.replace(/\\/$/, '') }}/api/post-status",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Settings').first().json.token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "={{ $('Settings').first().json.postId }}"
+            },
+            {
+              "name": "status",
+              "value": "posted"
+            },
+            {
+              "name": "linkedinUrl",
+              "value": "=https://www.linkedin.com/feed/update/{{ $json.urn }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1ef0f0c-cb9f-4b10-bd7e-f8c7a66d8616",
+      "name": "Report posted",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Settings').first().json.siteUrl.replace(/\\/$/, '') }}/api/post-status",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Settings').first().json.token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "={{ $('Settings').first().json.postId }}"
+            },
+            {
+              "name": "status",
+              "value": "skipped"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1c7bb046-f172-43cd-b379-337637b7030c",
+      "name": "Report declined",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Settings": {
+      "main": [
+        [
+          {
+            "node": "Fetch post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch post": {
+      "main": [
+        [
+          {
+            "node": "Check against template",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check against template": {
+      "main": [
+        [
+          {
+            "node": "Matches template?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Matches template?": {
+      "main": [
+        [
+          {
+            "node": "Ask for approval",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Report failed check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask for approval": {
+      "main": [
+        [
+          {
+            "node": "Approved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approved?": {
+      "main": [
+        [
+          {
+            "node": "Post to LinkedIn",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Report declined",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to LinkedIn": {
+      "main": [
+        [
+          {
+            "node": "Report posted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "active": false
+}

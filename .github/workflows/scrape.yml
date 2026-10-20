@@ -48,6 +48,15 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: Write LinkedIn posts and ping n8n
+        if: ${{ !cancelled() }}   # one post per person in config linkedin.people; see n8n/README.md
+        run: node src/linkedin-posts.js
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          N8N_WEBHOOK_ANIMESH: ${{ secrets.N8N_WEBHOOK_ANIMESH }}
+          N8N_WEBHOOK_SACHIN: ${{ secrets.N8N_WEBHOOK_SACHIN }}
+          POST_TOKEN_ANIMESH: ${{ secrets.POST_TOKEN_ANIMESH }}
+          POST_TOKEN_SACHIN: ${{ secrets.POST_TOKEN_SACHIN }}
 
   # Rebuilds the public job board (GitHub Pages) from the DB.
   # Turned off until you set the repo variable PUBLISH_SITE=true (see README → Public job board).

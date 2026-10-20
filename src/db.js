@@ -250,16 +250,19 @@ CREATE OR REPLACE VIEW company_index AS
                        WHERE j.company_slug = c.slug AND j.status <> 'skipped' AND j.first_seen_at > now() - interval '7 days') w ON true
     LEFT JOIN LATERAL (SELECT MAX(s.median_usd) AS usd FROM company_salaries s WHERE s.company_slug = c.slug) pay ON true;
 
--- LinkedIn "Hiring alert" posts (built and approved in n8n, see n8n/README.md) and the jobs in each, so a job
--- is never posted twice. A post is a draft until it is approved and published, then posted (or skipped).
+-- LinkedIn "Hiring alert" posts, one per person (config linkedin.people) per scrape, written by
+-- src/linkedin-posts.js, and the jobs in each. A job goes into one post only, ever. Each person's n8n reads its
+-- post from public_linkedin_posts and reports back through web/api/post-status.mjs (see n8n/README.md).
 CREATE TABLE IF NOT EXISTS posts (
     id           BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    person       TEXT NOT NULL,                    -- linkedin.people[].id, e.g. animesh
     status       TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'posted', 'skipped')),
-    body         TEXT,                             -- the post text as published
+    body         TEXT,                             -- the post text
     linkedin_url TEXT,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
     posted_at    TIMESTAMPTZ
 );
+CREATE INDEX IF NOT EXISTS posts_person ON posts (person, created_at DESC);
 CREATE TABLE IF NOT EXISTS post_jobs (
     post_id  BIGINT NOT NULL REFERENCES posts (id) ON DELETE CASCADE,
     source   TEXT NOT NULL,
@@ -270,8 +273,8 @@ CREATE TABLE IF NOT EXISTS post_jobs (
 ALTER TABLE posts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE post_jobs ENABLE ROW LEVEL SECURITY;
 
--- Jobs worth a post: first seen in the last 3 days, not already posted or in a draft from the last day (a draft
--- never approved frees its jobs after that), at most 2 per company, best first. Job score = company index (0 to 100) + up to 20 for freshness + 5 when it names its tech stack.
+-- Jobs worth a post: first seen in the last 3 days, in no post yet, at most 2 per company, best first.
+-- Job score = company index (0 to 100) + up to 20 for freshness + 5 when it names its tech stack.
 CREATE OR REPLACE VIEW post_candidates AS
     SELECT * FROM (
         SELECT j.source, j.job_id, j.title, j.company, j.company_slug, j.location, j.workplace, j.url,
@@ -284,44 +287,17 @@ CREATE OR REPLACE VIEW post_candidates AS
         FROM jobs j
         LEFT JOIN company_index ci ON ci.slug = j.company_slug
         WHERE j.status <> 'skipped' AND j.first_seen_at > now() - interval '3 days'
-          AND NOT EXISTS (SELECT 1 FROM post_jobs pj JOIN posts p ON p.id = pj.post_id
-                          WHERE pj.source = j.source AND pj.job_id = j.job_id
-                            AND (p.status = 'posted' OR (p.status = 'draft' AND p.created_at > now() - interval '1 day')))
+          AND NOT EXISTS (SELECT 1 FROM post_jobs pj WHERE pj.source = j.source AND pj.job_id = j.job_id)
     ) t
     WHERE nth_at_company <= 2
     ORDER BY score DESC, first_seen_at DESC;
 
--- What n8n calls (see n8n/README.md), so its database login needs nothing but EXECUTE on these two.
--- draft_post() saves the best max_jobs candidates as a new draft post and returns them, or nothing when there
--- are none. finish_post() marks a draft posted (with its text and LinkedIn link) or skipped.
-CREATE OR REPLACE FUNCTION draft_post(max_jobs INTEGER DEFAULT 8)
-RETURNS TABLE (post_id BIGINT, "position" INTEGER, title TEXT, company TEXT, company_slug TEXT, location TEXT,
-               workplace TEXT, url TEXT, role TEXT, level TEXT, tags TEXT[], is_premium BOOLEAN,
-               company_score NUMERIC, score NUMERIC)
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-#variable_conflict use_column
-DECLARE new_id BIGINT;
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM post_candidates) THEN RETURN; END IF;
-    INSERT INTO posts DEFAULT VALUES RETURNING id INTO new_id;
-    RETURN QUERY
-        WITH c AS (SELECT * FROM post_candidates LIMIT max_jobs),
-        ins AS (INSERT INTO post_jobs (post_id, source, job_id, position)
-                SELECT new_id, c.source, c.job_id, row_number() OVER (ORDER BY c.score DESC, c.first_seen_at DESC) FROM c
-                RETURNING post_jobs.source, post_jobs.job_id, post_jobs.position)
-        SELECT new_id, ins.position, c.title, c.company, c.company_slug, c.location, c.workplace, c.url, c.role, c.level,
-               c.tags, COALESCE(c.is_premium, false), c.company_score, c.score
-        FROM c JOIN ins ON ins.source = c.source AND ins.job_id = c.job_id
-        ORDER BY ins.position;
-END $$;
-CREATE OR REPLACE FUNCTION finish_post(id BIGINT, new_status TEXT, post_body TEXT DEFAULT NULL, post_url TEXT DEFAULT NULL)
-RETURNS VOID LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
-    UPDATE posts SET status = new_status, body = COALESCE(post_body, body), linkedin_url = COALESCE(post_url, linkedin_url),
-                     posted_at = CASE WHEN new_status = 'posted' THEN now() END
-    WHERE posts.id = finish_post.id AND status = 'draft' AND new_status IN ('posted', 'skipped');
-$$;
--- Functions are callable by everyone unless revoked, and Supabase would expose them to the site's public key.
-REVOKE ALL ON FUNCTION draft_post(INTEGER), finish_post(BIGINT, TEXT, TEXT, TEXT) FROM PUBLIC;
+-- Posts for the private posts page (web/posts.html) and for n8n. Job posts are public data, so the site's
+-- public key may read them; the page's password only keeps the page out of casual view.
+CREATE OR REPLACE VIEW public_linkedin_posts AS
+    SELECT p.id, p.person, p.status, p.body, p.linkedin_url AS "linkedinUrl", p.created_at AS "createdAt",
+           p.posted_at AS "postedAt", (SELECT COUNT(*)::int FROM post_jobs pj WHERE pj.post_id = p.id) AS jobs
+    FROM posts p;
 
 -- The site's hiring-alert page (web/alert.html?id=<post id>): the jobs of one post, in post order.
 CREATE OR REPLACE VIEW public_alert_jobs AS
@@ -338,11 +314,10 @@ DO $$ BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
         REVOKE ALL ON jobs, categories, searches, companies, company_salaries, fx_rates FROM anon, authenticated;
         REVOKE ALL ON posts, post_jobs, company_index, post_candidates FROM anon, authenticated;
-        REVOKE ALL ON FUNCTION draft_post(INTEGER), finish_post(BIGINT, TEXT, TEXT, TEXT) FROM anon, authenticated;
         REVOKE ALL ON public_jobs, public_categories, public_job_counts, public_companies, public_company_salaries,
-                      public_alert_jobs FROM anon, authenticated;
+                      public_alert_jobs, public_linkedin_posts FROM anon, authenticated;
         GRANT SELECT ON public_jobs, public_categories, public_job_counts, public_companies, public_company_salaries,
-                        public_alert_jobs TO anon, authenticated;
+                        public_alert_jobs, public_linkedin_posts TO anon, authenticated;
     END IF;
 END $$;
 
