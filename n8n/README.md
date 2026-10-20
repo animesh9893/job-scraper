@@ -9,7 +9,7 @@ Each person (Animesh, Sachin, …) runs their own n8n on Railway with their own 
    They show on the private page `/posts.html` and, as data, in the Supabase view `public_linkedin_posts`.
 3. **Ping**: the same run calls each person's n8n webhook (GitHub secret `N8N_WEBHOOK_<ID>`) with the post ID.
 4. **Fetch and check** (n8n): reads the post from Supabase and checks it against the template (first line,
-   numbered job lines, at most one link per job and one link to the board's home page at the end, 1 to 12 hashtags, at most 3,000 characters).
+   numbered job lines, at most one link per job and one link to the board's home page at the end, 1 to 30 hashtags, at most 3,000 characters).
 5. **Telegram approval** (n8n): sends you the post's picture (view `public_post_images`), then the post with
    Approve and Decline buttons, and waits.
 6. **Post** (n8n): on Approve, fetches the picture again and posts it with the text to your LinkedIn with your
@@ -107,8 +107,10 @@ LinkedIn has no bold or italic, so the heading, labels and company names use Uni
 Unicode italic ones, the way LinkedIn formatters do it. Job titles and hashtags stay plain so LinkedIn search finds
 them.
 
-Hashtags: the ones in `linkedin.hashtags`, then the jobs' two most common roles, three most named technologies and
-two most common cities, plus `#remotejobs` when a job is remote, up to `linkedin.maxHashtags` (10).
+Hashtags: the ones in `linkedin.hashtags`, then the jobs' four most common roles, eight most named technologies,
+four most common cities (plus `#remotejobs` when a job is remote) and six companies, then `linkedin.fillerHashtags`,
+up to `linkedin.maxHashtags` (25). A post that would pass LinkedIn's 3,000 characters drops hashtags from the end
+first (down to 5). The check allows 1 to 30.
 
 Each job has its own link (its LinkedIn job page, or its apply link for other sources) and, when known, its pay:
 the salary the listing shows, else the Glassdoor median for the closest role at that company (`payFor()`). Jobs

@@ -70,16 +70,21 @@ function mostCommon(values, n) {
     return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, n).map(([v]) => v);
 }
 
-/** Hashtags for a post: the configured ones, then its jobs' roles, top tech and cities, up to max. */
-export function postHashtags(jobs, hashtags = [], max = 10) {
+/**
+ * Hashtags for a post: the configured ones, then its jobs' roles, top tech, cities and companies, then the general
+ * `filler` ones until there are max.
+ */
+export function postHashtags(jobs, hashtags = [], max = 10, filler = []) {
     const remote = jobs.some((j) => j.workplace === 'remote');
     const cities = jobs.filter((j) => j.workplace !== 'remote').map((j) => where(j));
     return [...new Set([
         ...hashtags,
-        ...mostCommon(jobs.map((j) => ROLE_TAGS[j.role]), 2),
-        ...mostCommon(jobs.flatMap((j) => j.tags ?? []), 3).map(hashtag),
-        ...mostCommon(cities, 2).map((c) => `${hashtag(c)}jobs`),
+        ...mostCommon(jobs.map((j) => ROLE_TAGS[j.role]), 4),
+        ...mostCommon(jobs.flatMap((j) => j.tags ?? []), 8).map(hashtag),
+        ...mostCommon(cities, 4).map((c) => `${hashtag(c)}jobs`),
         ...(remote ? ['remotejobs'] : []),
+        ...mostCommon(jobs.map((j) => j.company), 6).map((c) => hashtag(c)).filter((t) => t.length <= 20),
+        ...filler,
     ].map(hashtag).filter(Boolean))].slice(0, max);
 }
 
@@ -124,24 +129,34 @@ export function jobLink({ job_id: jobId, url, apply_url: applyUrl }, siteUrl) {
  * board's home page; hashtags.
  * Job titles and hashtags stay plain so LinkedIn search finds them.
  */
-export function buildPost({ id, jobs, siteUrl, hashtags = [], maxHashtags = 10 }) {
+export function buildPost({ id, jobs, siteUrl, hashtags = [], maxHashtags = 10, fillerHashtags = [] }) {
     const companies = new Set(jobs.map((j) => j.company)).size;
     const top = mostCommon(jobs.flatMap((j) => j.tags ?? []), 3);
-    const tags = postHashtags(jobs, hashtags, maxHashtags);
-    return [
-        `🚀 ${bold(`Hiring alert: ${jobs.length} new opening${jobs.length === 1 ? '' : 's'} at ${companies} compan${companies === 1 ? 'y' : 'ies'}`)}`,
-        '',
-        ...jobs.flatMap((j, i) => [
-            `${i + 1}. ${bold(j.company)}: ${j.title}${where(j) ? ` · ${italic(where(j))}` : ''}`,
-            ...(j.pay ? [`💰 ${j.pay}`] : []),
-            ...(jobLink(j, siteUrl) ? [`🔗 ${jobLink(j, siteUrl)}`] : []),
+    const tags = postHashtags(jobs, hashtags, maxHashtags, fillerHashtags);
+    // Over LinkedIn's limit: drop hashtags from the end first (down to 5), before any job has to go.
+    let body = text(tags);
+    while (body.length > MAX_CHARS && tags.length > 5) {
+        tags.pop();
+        body = text(tags);
+    }
+    return body;
+
+    function text(tags) {
+        return [
+            `🚀 ${bold(`Hiring alert: ${jobs.length} new opening${jobs.length === 1 ? '' : 's'} at ${companies} compan${companies === 1 ? 'y' : 'ies'}`)}`,
             '',
-        ]),
-        ...(top.length ? [`🔥 ${bold('In demand:')} ${top.join(', ')}`, ''] : []),
-        `👉 ${bold('More jobs, updated every few hours:')} ${siteUrl.replace(/\/$/, '')}/`,
-        '',
-        tags.map((t) => `#${t}`).join(' '),
-    ].join('\n');
+            ...jobs.flatMap((j, i) => [
+                `${i + 1}. ${bold(j.company)}: ${j.title}${where(j) ? ` · ${italic(where(j))}` : ''}`,
+                ...(j.pay ? [`💰 ${j.pay}`] : []),
+                ...(jobLink(j, siteUrl) ? [`🔗 ${jobLink(j, siteUrl)}`] : []),
+                '',
+            ]),
+            ...(top.length ? [`🔥 ${bold('In demand:')} ${top.join(', ')}`, ''] : []),
+            `👉 ${bold('More jobs, updated every few hours:')} ${siteUrl.replace(/\/$/, '')}/`,
+            '',
+            tags.map((t) => `#${t}`).join(' '),
+        ].join('\n');
+    }
 }
 
 /**
@@ -164,7 +179,7 @@ export function checkPost(body) {
     if (home.length !== 1 || home[0] !== links.at(-1)) problems.push('needs one link to the board\'s home page, after all the others');
     if (links.length - 1 > jobs) problems.push(`${links.length - 1} job links for ${jobs} jobs`);
     const tags = (lines.at(-1) ?? '').match(/#\w+/g) ?? [];
-    if (tags.length < 1 || tags.length > 12) problems.push(`${tags.length} hashtags on the last line, expected 1 to 12`);
+    if (tags.length < 1 || tags.length > 30) problems.push(`${tags.length} hashtags on the last line, expected 1 to 30`);
     if (/\b(undefined|null|NaN)\b/.test(text)) problems.push('contains "undefined", "null" or "NaN"');
     return problems;
 }
@@ -245,11 +260,11 @@ async function main() {
                 continue;
             }
             const { rows: [{ id }] } = await store.query('INSERT INTO posts (person) VALUES ($1) RETURNING id', [person.id]);
-            let body = buildPost({ id, jobs, siteUrl: cfg.siteUrl, hashtags: cfg.hashtags, maxHashtags: cfg.maxHashtags });
+            let body = buildPost({ id, jobs, siteUrl: cfg.siteUrl, hashtags: cfg.hashtags, maxHashtags: cfg.maxHashtags, fillerHashtags: cfg.fillerHashtags });
             // Over LinkedIn's limit (very long titles): leave the last jobs for the next post, down to minJobs.
             while (body.length > MAX_CHARS && jobs.length > cfg.minJobs) {
                 jobs = jobs.slice(0, -1);
-                body = buildPost({ id, jobs, siteUrl: cfg.siteUrl, hashtags: cfg.hashtags, maxHashtags: cfg.maxHashtags });
+                body = buildPost({ id, jobs, siteUrl: cfg.siteUrl, hashtags: cfg.hashtags, maxHashtags: cfg.maxHashtags, fillerHashtags: cfg.fillerHashtags });
             }
             await store.query('UPDATE posts SET body = $2 WHERE id = $1', [id, body]);
             for (const [i, j] of jobs.entries()) {
