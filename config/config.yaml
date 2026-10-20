@@ -95,7 +95,8 @@ linkedin:
   siteUrl: https://job-scraper-web-beryl.vercel.app # the job board; each post links to its /alert.html page
   jobsPerPost: 6
   minJobs: 3            # no post for a person who would get fewer new jobs than this
-  hashtags: [hiring, softwareengineering, techjobs]
+  hashtags: [hiring, softwareengineering, techjobs, jobsearch]
+  maxHashtags: 10       # configured hashtags first, then the jobs' roles, tech and cities
   people:
     - id: animesh
       name: Animesh
