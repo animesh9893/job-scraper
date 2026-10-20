@@ -185,11 +185,91 @@
       ]
     },
     {
+      "id": "55b515a4-f774-40e4-bd45-9f3b00315fa4",
+      "name": "Fetch picture",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        200
+      ],
+      "parameters": {
+        "url": "={{ $('Settings').first().json.supabaseUrl }}/rest/v1/public_post_images",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "=eq.{{ $node['Check against template'].json.id }}"
+            },
+            {
+              "name": "select",
+              "value": "image"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Settings').first().json.supabaseKey }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "459079fe-237a-45ff-89d3-3e836abda1a9",
+      "name": "Picture to file",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        1320,
+        200
+      ],
+      "parameters": {
+        "operation": "toBinary",
+        "sourceProperty": "image",
+        "binaryPropertyName": "data",
+        "options": {
+          "fileName": "hiring-alert.png",
+          "mimeType": "image/png"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "a067a78c-4f13-4b75-9f03-91184ff5f079",
+      "name": "Show picture",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1540,
+        120
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "sendPhoto",
+        "chatId": "={{ $('Settings').first().json.telegramChatId }}",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "additionalFields": {
+          "caption": "=Picture for LinkedIn post {{ $node['Check against template'].json.id }}"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "webhookId": "a836486c-ab30-40fa-8899-596d03121925"
+    },
+    {
       "parameters": {
         "resource": "message",
         "operation": "sendAndWait",
         "chatId": "={{ $('Settings').first().json.telegramChatId }}",
-        "message": "={{ ('LinkedIn post ' + $json.id + ', ' + $json.jobs + ' jobs. Post it?\\n\\n' + $json.body).replace(/([_*`\\[])/g, '\\\\$1') }}",
+        "message": "={{ ('LinkedIn post ' + $node['Check against template'].json.id + ', ' + $node['Check against template'].json.jobs + ' jobs, with the picture above. Post it?\\n\\n' + $node['Check against template'].json.body).replace(/([_*`\\[])/g, '\\\\$1') }}",
         "approvalOptions": {
           "values": {
             "approvalType": "double",
@@ -213,7 +293,7 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1100,
+        1760,
         200
       ],
       "webhookId": "88ee1782-4667-4658-bd3b-9c031b7a437d"
@@ -269,11 +349,19 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        1320,
+        1980,
         200
       ]
     },
     {
+      "id": "78f193a4-3a2d-4603-8661-9ae8e0d89be6",
+      "name": "Fetch picture for LinkedIn",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2200,
+        100
+      ],
       "parameters": {
         "url": "={{ $('Settings').first().json.supabaseUrl }}/rest/v1/public_post_images",
         "sendQuery": true,
@@ -300,16 +388,18 @@
         },
         "options": {}
       },
-      "id": "f2f57d1f-a45f-4a20-9e51-82d663d59e94",
-      "name": "Fetch picture",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        1540,
-        100
-      ]
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
     },
     {
+      "id": "03c349e9-0b67-487d-b394-a736f513cf66",
+      "name": "Picture file for LinkedIn",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        2420,
+        100
+      ],
       "parameters": {
         "operation": "toBinary",
         "sourceProperty": "image",
@@ -319,32 +409,45 @@
           "mimeType": "image/png"
         }
       },
-      "id": "ec0c3ae9-ba85-4baa-8462-cfa9150b203b",
-      "name": "Picture to file",
-      "type": "n8n-nodes-base.convertToFile",
-      "typeVersion": 1.1,
-      "position": [
-        1760,
-        100
-      ]
+      "onError": "continueErrorOutput"
     },
     {
+      "id": "4c03ae6f-891d-481c-85c6-ff1583feb986",
+      "name": "Post to LinkedIn",
+      "type": "n8n-nodes-base.linkedIn",
+      "typeVersion": 1,
+      "position": [
+        2640,
+        0
+      ],
       "parameters": {
         "postAs": "person",
         "person": "",
         "text": "={{ $node['Check against template'].json.body }}",
         "shareMediaCategory": "IMAGE",
-        "additionalFields": {},
+        "additionalFields": {
+          "title": "=Hiring alert: {{ $node['Check against template'].json.jobs }} new openings"
+        },
         "binaryPropertyName": "data"
       },
-      "id": "8917d3fa-405c-4fde-87b3-f3eff8502d91",
-      "name": "Post to LinkedIn",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "b9cabd4e-2723-4047-8fd3-7bae308dbd51",
+      "name": "Post text only",
       "type": "n8n-nodes-base.linkedIn",
       "typeVersion": 1,
       "position": [
-        1980,
-        100
-      ]
+        2640,
+        220
+      ],
+      "parameters": {
+        "postAs": "person",
+        "person": "",
+        "text": "={{ $node['Check against template'].json.body }}",
+        "shareMediaCategory": "NONE",
+        "additionalFields": {}
+      }
     },
     {
       "parameters": {
@@ -383,7 +486,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2200,
+        2860,
         100
       ]
     },
@@ -420,12 +523,23 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1540,
-        300
+        2200,
+        320
       ]
     }
   ],
   "connections": {
+    "Run by hand": {
+      "main": [
+        [
+          {
+            "node": "Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Webhook": {
       "main": [
         [
@@ -474,35 +588,6 @@
       "main": [
         [
           {
-            "node": "Ask for approval",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Report failed check",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Ask for approval": {
-      "main": [
-        [
-          {
-            "node": "Approved?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Approved?": {
-      "main": [
-        [
-          {
             "node": "Fetch picture",
             "type": "main",
             "index": 0
@@ -510,29 +595,7 @@
         ],
         [
           {
-            "node": "Report declined",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Post to LinkedIn": {
-      "main": [
-        [
-          {
-            "node": "Report posted",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Run by hand": {
-      "main": [
-        [
-          {
-            "node": "Settings",
+            "node": "Report failed check",
             "type": "main",
             "index": 0
           }
@@ -554,7 +617,112 @@
       "main": [
         [
           {
+            "node": "Show picture",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ask for approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Show picture": {
+      "main": [
+        [
+          {
+            "node": "Ask for approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask for approval": {
+      "main": [
+        [
+          {
+            "node": "Approved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approved?": {
+      "main": [
+        [
+          {
+            "node": "Fetch picture for LinkedIn",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Report declined",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch picture for LinkedIn": {
+      "main": [
+        [
+          {
+            "node": "Picture file for LinkedIn",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Picture file for LinkedIn": {
+      "main": [
+        [
+          {
             "node": "Post to LinkedIn",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Post text only",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to LinkedIn": {
+      "main": [
+        [
+          {
+            "node": "Report posted",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Post text only",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post text only": {
+      "main": [
+        [
+          {
+            "node": "Report posted",
             "type": "main",
             "index": 0
           }

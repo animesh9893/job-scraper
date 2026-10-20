@@ -9,9 +9,11 @@ Each person (Animesh, Sachin, …) runs their own n8n on Railway with their own 
 3. **Ping**: the same run calls each person's n8n webhook (GitHub secret `N8N_WEBHOOK_<ID>`) with the post ID.
 4. **Fetch and check** (n8n): reads the post from Supabase and checks it against the template (first line,
    numbered job lines, at most one link per job and one link to its `/alert.html` page at the end, 1 to 12 hashtags, at most 3,000 characters).
-5. **Telegram approval** (n8n): sends you the post on Telegram with Approve and Decline buttons, and waits.
-6. **Post** (n8n): on Approve, fetches the post's picture (view `public_post_images`) and posts both to your
-   LinkedIn with your LinkedIn credential.
+5. **Telegram approval** (n8n): sends you the post's picture (view `public_post_images`), then the post with
+   Approve and Decline buttons, and waits.
+6. **Post** (n8n): on Approve, fetches the picture again and posts it with the text to your LinkedIn with your
+   LinkedIn credential (the node uploads it through LinkedIn's Images API, then creates the post). If the post has
+   no picture or the upload fails, it posts the text alone ("Post text only") rather than nothing.
 7. **Report back** (n8n): tells the site the post was posted (with its LinkedIn link) or declined, so the posts
    page shows it.
 
@@ -19,9 +21,12 @@ Each job goes into one post only, ever, so the two of you never post the same op
 the same company's same title (ignoring case and punctuation) was in a post in the last 30 days, or is listed
 twice in the same scrape: LinkedIn often lists one opening under new ids or once per city.
 
-Each post gets a picture: a 1200×1200 wall of up to 20 company logos, the post's companies (marked NEW) and the
-board's top premium companies, with the opening count and the site. It's drawn by `src/post-image.js` when the
-post is written (logos from LinkedIn, else the company site's icon, else initials) and stored in `posts.image`.
+Each post gets a 1080×1350 picture (4:5, the tallest LinkedIn shows uncropped in the feed): the opening count, a
+card for each of the post's companies (up to 6) with its logo, roles and places, and a strip of the board's top
+premium companies ("also hiring on the board", one row, or two when the post has one or two companies), with the
+site at the bottom. It's drawn by `src/post-image.js` when the post is written (logos from LinkedIn, else the
+company site's icon, else initials) and stored in `posts.image`. Pictures are drawn once, so drafts written before
+a design change keep the old one.
 
 ## Setup for each person
 
@@ -36,12 +41,12 @@ Do this once per person; `<ID>` is their id in `linkedin.people` in capitals (`A
 4. **Webhook auth.** Open the Webhook node → Authentication: Header Auth → new credential with name
    `Authorization` and value `Bearer <token>`.
 5. **Telegram.** Make a new bot for approvals with @BotFather (not the job-alerts bot) and send it any message
-   so it may write to you. Open "Ask for approval" and "Report failed check" and create a Telegram credential
-   with the bot's token.
+   so it may write to you. Open "Show picture", "Ask for approval" and "Report failed check" and create (or pick)
+   a Telegram credential with the bot's token.
 6. **LinkedIn.** Create an app at linkedin.com/developers on a LinkedIn Page you own, add the products "Share on
    LinkedIn" and "Sign In with LinkedIn using OpenID Connect", put n8n's OAuth redirect URL in the app, then open
-   "Post to LinkedIn", create a LinkedIn credential with the app's client ID and secret, and pick yourself under
-   Person. The login lasts 60 days; reconnect it in n8n about every two months.
+   "Post to LinkedIn", create a LinkedIn credential with the app's client ID and secret (Organization Support and
+   Legacy off), and pick yourself under Person. Pick the same credential and Person in "Post text only". The login lasts 60 days; reconnect it in n8n about every two months.
 7. **Activate** the workflow and copy its Production URL from the Webhook node.
 8. **GitHub secrets** (repo → Settings → Secrets and variables → Actions): `N8N_WEBHOOK_<ID>` = that URL,
    `POST_TOKEN_<ID>` = the token.
@@ -54,16 +59,11 @@ A person without `N8N_WEBHOOK_<ID>` still gets posts on `/posts.html`; nothing i
 the rest of the flow on it (so Approve really posts it). To test the webhook itself, arm it the same way and send
 `POST <Test URL>` with your `Authorization: Bearer <token>` header and `{ "postId": 12 }`.
 
-**Already imported an older version?** Rather than re-importing (which loses your credentials and Person), add the
-picture by hand: between "Approved?" (true) and "Post to LinkedIn" add
-
-- an **HTTP Request** node "Fetch picture": GET `{{ $('Settings').first().json.supabaseUrl }}/rest/v1/public_post_images`
-  with query `id` = `eq.{{ $node['Check against template'].json.id }}` and `select` = `image`, and header `apikey` =
-  `{{ $('Settings').first().json.supabaseKey }}`;
-- a **Convert to File** node "Picture to file": Move Base64 String to File, source property `image`, output field
-  `data`, file name `hiring-alert.png`, MIME type `image/png`;
-
-then in "Post to LinkedIn" set Media Category to **Image** with input binary field `data`.
+**Already imported an older version?** Deactivate it (two active workflows can't share the webhook path), then
+Workflows → Create → ⋯ → Import from file with the new file. On the same n8n the credentials are found again by
+their IDs, so check that the Webhook, the three Telegram nodes and both LinkedIn nodes show yours, that Person is
+set in both LinkedIn nodes, and that Settings has your `telegramChatId` and `token`. Save, activate, and delete the
+old workflow once a post has gone through.
 
 ## What n8n receives and reads
 

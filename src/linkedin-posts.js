@@ -178,13 +178,13 @@ async function ping(url, token, payload) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 }
 
-// Draws the picture of every draft post that has none yet (new posts, and drafts from before pictures): the
-// logos of its companies and of the board's top premium companies.
+// Draws the picture of every draft post that has none yet (new posts, and drafts from before pictures): a card
+// for each of its companies with their roles, and a strip of the board's top premium companies.
 async function drawImages(store, siteUrl) {
-    const { renderPostImage, loadLogos, pickCompanies, MAX_LOGOS } = await import('./post-image.js');
+    const { renderPostImage, loadLogos, pickCompanies, MAX_FEATURED, MAX_STRIP } = await import('./post-image.js');
     const { rows } = await store.query(
         `SELECT p.id, p.created_at, COALESCE(c.slug, j.company) AS slug, COALESCE(c.name, j.company) AS name,
-                c.logo_url, c.domain, COALESCE(c.is_premium, false) AS is_premium
+                c.logo_url, c.domain, COALESCE(c.is_premium, false) AS is_premium, j.title, j.location, j.workplace
          FROM posts p
          JOIN post_jobs pj ON pj.post_id = p.id
          JOIN jobs j ON j.source = pj.source AND j.job_id = pj.job_id
@@ -195,17 +195,22 @@ async function drawImages(store, siteUrl) {
     const { rows: premium } = await store.query(
         `SELECT c.slug, c.name, c.logo_url, c.domain, true AS is_premium
          FROM companies c LEFT JOIN company_index ci ON ci.slug = c.slug
-         WHERE c.is_premium ORDER BY ci.score DESC NULLS LAST, c.sort_order, c.name LIMIT $1`, [MAX_LOGOS]);
+         WHERE c.is_premium ORDER BY ci.score DESC NULLS LAST, c.sort_order, c.name LIMIT $1`, [MAX_STRIP + MAX_FEATURED]);
     const logos = new Map();   // slug → company with its logo, fetched once for all posts
+    const withLogo = (c) => ({ ...c, logo: logos.get(c.slug)?.logo ?? null });
     for (const id of new Set(rows.map((r) => r.id))) {
         const mine = rows.filter((r) => r.id === id);
-        const postCompanies = [...new Map(mine.map((r) => [r.slug, r])).values()];
-        const picked = pickCompanies(postCompanies, premium);
-        for (const c of await loadLogos(picked.filter((c) => !logos.has(c.slug)))) logos.set(c.slug, c);
-        const companies = picked.map((c) => ({ ...c, logo: logos.get(c.slug)?.logo ?? null }));
-        const png = renderPostImage({ companies, jobs: mine.length, companiesInPost: postCompanies.length, siteUrl, date: mine[0].created_at });
+        const postCompanies = new Map();
+        for (const r of mine) {
+            if (!postCompanies.has(r.slug)) postCompanies.set(r.slug, { ...r, jobs: [] });
+            postCompanies.get(r.slug).jobs.push({ title: r.title, place: where(r) });
+        }
+        const { featured, more, strip } = pickCompanies([...postCompanies.values()], premium);
+        for (const c of await loadLogos([...featured, ...strip].filter((c) => !logos.has(c.slug)))) logos.set(c.slug, c);
+        const png = renderPostImage({ featured: featured.map(withLogo), more, strip: strip.map(withLogo), jobs: mine.length,
+            companiesInPost: postCompanies.size, siteUrl, date: mine[0].created_at });
         await store.query('UPDATE posts SET image = $2 WHERE id = $1', [id, png]);
-        console.log(`  🖼 post ${id}: picture with ${companies.length} logos (${companies.filter((c) => c.logo).length} found)`);
+        console.log(`  🖼 post ${id}: picture with ${featured.length} cards and ${strip.length} more logos`);
     }
 }
 
