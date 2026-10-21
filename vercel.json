@@ -3,5 +3,8 @@
   "framework": null,
   "installCommand": "",
   "buildCommand": "",
-  "outputDirectory": "web"
+  "outputDirectory": "web",
+  "redirects": [
+    { "source": "/:path((?!api/|api$).*)", "destination": "https://jobs.krawlr.xyz/:path", "permanent": true }
+  ]
 }

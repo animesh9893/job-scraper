@@ -3,14 +3,12 @@
 //                                              rotating searches that ran longest ago (all of them if it's `all`)
 //        node src/run.js [search-name ...]   → just these searches
 //        node src/run.js all                 → every active search
-//        node src/run.js none                → no searches, only the steps after them (company IDs, salaries)
-// SALARIES=all fetches salaries for every company that's due, not only premium ones and ones with recent
-// jobs; SALARIES=<n> fetches up to n. Blank uses salaries.companiesPerRun.
+// Glassdoor salaries are a separate job: src/salaries.js (workflow salaries.yml).
 import { appendFileSync } from 'node:fs';
 import { loadConfig, requireEnv } from './config.js';
 import { openDb } from './db.js';
-import { createClient, runSearch, normalizeJob, passesFilters, fetchLinkedinCompany, fetchSalaries, salaryRows } from './scrape.js';
-import { loadTokens, checkToken, nextUsableToken } from './tokens.js';
+import { runSearch, normalizeJob, passesFilters, fetchLinkedinCompany } from './scrape.js';
+import { apifyCredit } from './credit.js';
 import { tagJob } from './tags.js';
 
 // In GitHub Actions, errors are also emitted as annotations so they show at the top of the run page.
@@ -39,11 +37,10 @@ try {
 }
 
 const all = only.length === 1 && only[0] === 'all';
-const none = only.length === 1 && only[0] === 'none';
 await store.syncPremiumSearches(config.premium);
-const rows = none ? [] : await store.pickSearches({ names: all ? [] : only, all, limit: config.searchesPerRun === 'all' ? null : config.searchesPerRun });
-const missing = all || none ? [] : only.filter((name) => !rows.some((r) => r.name === name));
-if (missing.length || (rows.length === 0 && !none)) {
+const rows = await store.pickSearches({ names: all ? [] : only, all, limit: config.searchesPerRun === 'all' ? null : config.searchesPerRun });
+const missing = all ? [] : only.filter((name) => !rows.some((r) => r.name === name));
+if (missing.length || rows.length === 0) {
     const known = await store.allSearchNames();
     await store.close();
     fatal(missing.length
@@ -54,44 +51,13 @@ if (missing.length || (rows.length === 0 && !none)) {
 const searches = rows.map((r) => ({ ...r, input: { ...config.defaults, ...r.input } }));
 console.log(`Running ${searches.length} search(es): ${searches.map((s) => s.name).join(', ')}`);
 
-const tokens = await loadTokens(store);
-if (tokens.length === 0) {
+const credit = await apifyCredit(store, config.minRemainingUsd);
+if (credit.count === 0) {
     await store.close();
     fatal('No Apify token: set the APIFY_TOKEN secret or add one with node src/tokens.js add <token>');
 }
-const usedUp = new Set();
-let token = null;
-
-/** Keeps the current token while it has enough credit left, otherwise moves on to the next one. */
-async function pickToken() {
-    if (token) {
-        await checkToken(store, token);
-        if (token.remaining_usd != null && token.remaining_usd >= config.minRemainingUsd) return token;
-        console.log(`  ↪ token "${token.label}" has ${token.remaining_usd == null ? 'an error' : `$${token.remaining_usd.toFixed(2)} left`}, switching`);
-        usedUp.add(token);
-    }
-    token = await nextUsableToken(store, tokens, config.minRemainingUsd, usedUp);
-    return token;
-}
-
-/**
- * Runs fn(client) with a token that has credit. When a run fails and the token turns out to be out of credit,
- * switches to the next token and runs fn again. Returns { result }, or { noCredit: true } when no token has
- * credit left; other errors are thrown.
- */
-async function withCredit(fn) {
-    while (true) {
-        if (!(await pickToken())) return { noCredit: true };
-        try {
-            return { result: await fn(createClient(token.token)) };
-        } catch (err) {
-            await checkToken(store, token);
-            if (token.remaining_usd == null || token.remaining_usd < config.minRemainingUsd) continue;
-            throw err;
-        }
-    }
-}
-const noCreditError = () => `No Apify token has at least $${config.minRemainingUsd} left this month`;
+const { withCredit, noCreditError } = credit;
+const tokenLabel = () => credit.current()?.label;
 const results = [];
 
 for (const search of searches) {
@@ -119,15 +85,15 @@ for (const search of searches) {
 
         await store.markSearch(search.name, 'SUCCEEDED');
         await store.finishRun(runId, {
-            status: 'SUCCEEDED', apify_run_id: apifyRunId, apify_token: token.label, items_found: items.length,
+            status: 'SUCCEEDED', apify_run_id: apifyRunId, apify_token: tokenLabel(), items_found: items.length,
             items_new: added, items_skipped: skipped, cost_usd: costUsd,
         });
         results.push({ search: search.name, ok: true, found: items.length, added, skipped, costUsd: costUsd ?? 0 });
         console.log(`  ✔ ${items.length} found, ${added} new, ${kept.length - added} already in DB, ${skipped} filtered` +
-            (costUsd != null ? `, $${costUsd.toFixed(4)}` : '') + ` [token: ${token.label}]`);
+            (costUsd != null ? `, $${costUsd.toFixed(4)}` : '') + ` [token: ${tokenLabel()}]`);
     } catch (err) {
         await store.markSearch(search.name, 'FAILED', err.message);
-        await store.finishRun(runId, { status: 'FAILED', apify_run_id: err.runId ?? null, apify_token: token.label, error: err.message });
+        await store.finishRun(runId, { status: 'FAILED', apify_run_id: err.runId ?? null, apify_token: tokenLabel(), error: err.message });
         results.push({ search: search.name, ok: false, error: err.message });
         reportError(`${search.name}: ${err.message}`);
     }
@@ -159,67 +125,14 @@ for (const { slug, linkedin_slug: page } of lookups) {
 }
 if (lookups.length) await store.syncPremiumSearches(config.premium);
 
-// Glassdoor salaries for companies never fetched or due a refresh (cached for salaries.refreshDays).
-const sal = config.salaries;
-const salaryMode = (process.env.SALARIES ?? '').trim();
-const salaryLimit = salaryMode === 'all' ? null : Number(salaryMode || sal.companiesPerRun);
-const salaryCompanies = salaryLimit === null || salaryLimit > 0
-    ? await store.companiesForSalaries(salaryLimit, sal.refreshDays, { everyCompany: salaryMode === 'all' }) : [];
-const salaryResults = [];
-let salaryCost = 0;
-if (salaryCompanies.length) console.log(`Salaries: ${salaryCompanies.map((c) => c.slug).join(', ')}`);
-for (const company of salaryCompanies) {
-    // Every role each time: the Actor bills per salary found, so roles Glassdoor doesn't have cost nothing.
-    const roles = sal.roles;
-    const runId = await store.startRun(`salaries:${company.slug}`, sal.actor);
-    try {
-        const outcome = await withCredit((client) => fetchSalaries(client, sal.actor,
-            { company: company.name, roles, location: sal.location, locationType: sal.locationType }, config.timeoutSecs));
-        if (outcome.noCredit) {
-            // The company isn't marked as fetched, so it's first in line next time.
-            await store.finishRun(runId, { status: 'FAILED', error: noCreditError() });
-            console.warn(`  ! salaries: ${noCreditError()}`);
-            break;
-        }
-        const { items, runId: apifyRunId, costUsd } = outcome.result;
-        salaryCost += costUsd ?? 0;
-        const rows = salaryRows(items, await store.fxRates([...new Set(items.map((i) => i.currency).filter(Boolean))]));
-        const status = await store.saveSalaries(company.slug,
-            { rows, glassdoorName: items[0]?.company_name ?? null, rating: items[0]?.company_rating ?? null });
-        await store.finishRun(runId, {
-            status: 'SUCCEEDED', apify_run_id: apifyRunId, apify_token: token.label, items_found: items.length,
-            items_new: status === 'ok' ? rows.length : 0, items_skipped: items.length - (status === 'ok' ? rows.length : 0), cost_usd: costUsd,
-        });
-        salaryResults.push(`| ${company.slug} | ${status} | ${status === 'ok' ? rows.length : 0} | $${(costUsd ?? 0).toFixed(4)} |`);
-        console.log(`  $ ${company.slug}: ${status === 'ok' ? `${rows.length} role(s)` : status === 'mismatch'
-            ? `skipped, Glassdoor matched "${items[0]?.company_name}"` : 'no salaries on Glassdoor'} ` +
-            `(${roles.length} asked${costUsd != null ? `, $${costUsd.toFixed(4)}` : ''})`);
-    } catch (err) {
-        // "Invalid input: Glassdoor has no company matching '…'": an answer, not a failure, so it's cached too.
-        const notFound = /Glassdoor has no company matching/i.test(err.message);
-        await store.saveSalaries(company.slug, notFound ? { notFound: err.message } : { error: err.message });
-        if (notFound) {
-            await store.finishRun(runId, { status: 'SUCCEEDED', apify_run_id: err.runId ?? null, apify_token: token?.label, items_found: 0 });
-            salaryResults.push(`| ${company.slug} | not on Glassdoor | 0 | |`);
-            console.log(`  $ ${company.slug}: not on Glassdoor`);
-            continue;
-        }
-        salaryResults.push(`| ${company.slug} | ❌ ${err.message} | | |`);
-        await store.finishRun(runId, { status: 'FAILED', apify_run_id: err.runId ?? null, apify_token: token?.label, error: err.message });
-        console.warn(`  ! salaries for ${company.slug}: ${err.message}`);
-    }
-}
-
-// Save the latest remaining credit of the token we ended on.
-if (token) await checkToken(store, token);
+await credit.finish();
 await store.close();
 
 const ok = results.filter((r) => r.ok);
 const sum = (key) => ok.reduce((n, r) => n + r[key], 0);
 const failed = results.length - ok.length;
 console.log(`\nDone: ${sum('found')} found, ${sum('added')} new, ${sum('skipped')} filtered, ` +
-    `~$${sum('costUsd').toFixed(4)} Apify cost` + (failed ? `, ${failed} search(es) failed` : '') +
-    (salaryCompanies.length ? `; salaries for ${salaryCompanies.length} company(ies), ~$${salaryCost.toFixed(4)}` : ''));
+    `~$${sum('costUsd').toFixed(4)} Apify cost` + (failed ? `, ${failed} search(es) failed` : ''));
 
 // In GitHub Actions, also show a results table on the run's summary page.
 if (process.env.GITHUB_STEP_SUMMARY) {
@@ -230,8 +143,6 @@ if (process.env.GITHUB_STEP_SUMMARY) {
         '### Scrape results', '',
         '| Search | Status | Found | New | Filtered | Cost |', '|---|---|---|---|---|---|',
         ...rows, '',
-        ...(salaryResults.length ? ['### Glassdoor salaries', '', '| Company | Status | Roles | Cost |', '|---|---|---|---|', ...salaryResults,
-            `| **Total** | | | $${salaryCost.toFixed(4)} |`, ''] : []),
     ].join('\n'));
 }
 

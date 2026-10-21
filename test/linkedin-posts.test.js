@@ -162,7 +162,7 @@ test('a long post drops hashtags before going over LinkedIn\'s limit', () => {
     const jobs = Array.from({ length: 10 }, (_, i) => job(i, { title: 'Senior Software Engineer II, Backend Platform (Golang)',
         company: `Cencora Global Capability Center ${i}`, tags: ['Go', 'Kubernetes'], pay: '~₹45L/yr on Glassdoor' }));
     const filler = Array.from({ length: 30 }, (_, i) => `longfillerhashtag${i}`);
-    const body = buildPost({ id: 1, siteUrl: 'https://job-scraper-web-beryl.vercel.app', hashtags: ['hiring'], maxHashtags: 30, fillerHashtags: filler, jobs });
+    const body = buildPost({ id: 1, siteUrl: 'https://jobs.krawlr.xyz', hashtags: ['hiring'], maxHashtags: 30, fillerHashtags: filler, jobs });
     assert.ok(body.length <= 3000, `${body.length} characters`);
     assert.deepEqual(checkPost(body), []);
 });

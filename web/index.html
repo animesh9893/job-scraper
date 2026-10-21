@@ -6,9 +6,16 @@
 <meta name="google-adsense-account" content="ca-pub-9664106331529294">
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9664106331529294"
      crossorigin="anonymous"></script>
-<script defer src="https://cloud.umami.is/script.js" data-website-id="5fbe1f5f-e3f5-4827-bafa-b9b59b4e3ec3"></script>
+<script defer src="https://cloud.umami.is/script.js" data-website-id="85f1d932-718c-4ab3-aa4d-09c35118dfcd"></script>
 <title>Tech Jobs</title>
 <meta name="description" content="Fresh frontend, backend, full stack and mobile developer jobs from around the world, updated regularly.">
+<link rel="canonical" href="https://jobs.krawlr.xyz/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Tech Jobs">
+<meta property="og:title" content="Tech Jobs">
+<meta property="og:description" content="Fresh frontend, backend, full stack and mobile developer jobs from around the world, updated regularly.">
+<meta property="og:url" content="https://jobs.krawlr.xyz/">
+<meta name="twitter:card" content="summary">
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <style>
   :root {
@@ -214,6 +221,7 @@
 </div>
 
 <script src="config.js"></script>
+<script src="analytics.js"></script>
 <script>
 const PAGE_SIZE = 25;
 const WORKPLACES = [['all', 'Anywhere'], ['remote', 'Remote'], ['hybrid', 'Hybrid'], ['onsite', 'On-site / not stated']];
@@ -509,10 +517,14 @@ async function loadMore() {
 }
 
 // Filters live in the URL (?category=backend&workplace=remote&company=google&q=react) so filtered views can be shared.
+let settled;
 function sync() {
   const params = new URLSearchParams();
   for (const [k, v] of Object.entries(state)) if (v && v !== 'all') params.set(k, v);
   history.replaceState(null, '', params.size ? `?${params}` : location.pathname);
+  // One Umami event per filter the visitor stays on (not one per keystroke).
+  clearTimeout(settled);
+  if (params.size) settled = setTimeout(() => track('board-filter', Object.fromEntries(params)), 2000);
   renderTabs();
   renderCompanies();
   renderCompanyInfo();

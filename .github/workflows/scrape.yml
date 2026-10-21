@@ -1,22 +1,30 @@
 name: Scrape jobs
 
+# LinkedIn job searches only: premium searches that are due plus the rotation (src/run.js), then links jobs to
+# companies, tags them and looks up missing LinkedIn company IDs. By default it then sends Telegram alerts and
+# writes LinkedIn posts for the new jobs (the two workflows below, also runnable on their own).
+# Glassdoor salaries are separate: salaries.yml. No schedule: n8n starts every workflow (README → Workflows).
 on:
-  workflow_dispatch:            # "Run workflow" button in the Actions tab
+  workflow_dispatch:            # "Run workflow" button, or POST …/actions/workflows/scrape.yml/dispatches
     inputs:
       searches:
-        description: 'Search names, comma-separated (blank = next in rotation, all = every active search, none = skip searches)'
+        description: 'Search names, comma-separated (blank = premium due + next in rotation, all = every active search)'
         required: false
         default: ''
-      salaries:
-        description: 'Companies to fetch Glassdoor salaries for (blank = salaries.companiesPerRun, a number, or all = every company due)'
-        required: false
-        default: ''
+      alerts:
+        description: 'yes = send Telegram alerts after the scrape (telegram-alerts.yml)'
+        type: choice
+        options: ['yes', 'no']
+        default: 'yes'
+      posts:
+        description: 'yes = write LinkedIn posts after the scrape (linkedin-posts.yml)'
+        type: choice
+        options: ['yes', 'no']
+        default: 'yes'
       force_posts:
         description: 'yes = write LinkedIn posts now, even if the last one is newer than linkedin.everyHours'
         required: false
         default: ''
-  # No schedule: here. n8n's "Start scrape every 2 hours" workflow starts runs through workflow_dispatch,
-  # on time and without doubling up with GitHub's best-effort timer (README → Schedule).
 
 concurrency:
   group: scrape                 # never run two scrapes at once
@@ -30,7 +38,7 @@ jobs:
     # Secrets are only handed to code that is already on main, never to another branch.
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 300          # "all" runs every search (about 40s each) or every company's salaries (about 45s each)
+    timeout-minutes: 300          # "all" runs every search, about 40s each
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -42,53 +50,20 @@ jobs:
         run: node src/run.js "$SEARCHES"
         env:
           SEARCHES: ${{ inputs.searches }}
-          SALARIES: ${{ inputs.salaries }}
           APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      - name: Send Telegram alerts
-        if: ${{ !cancelled() }}   # also after a partly failed scrape; skips itself without the secret
-        run: node src/telegram-notify.js
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      - name: Write LinkedIn posts and ping n8n
-        if: ${{ !cancelled() }}   # one post per person in config linkedin.people; see n8n/README.md
-        run: node src/linkedin-posts.js
-        env:
-          FORCE_POSTS: ${{ inputs.force_posts }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          N8N_WEBHOOK_ANIMESH: ${{ secrets.N8N_WEBHOOK_ANIMESH }}
-          N8N_WEBHOOK_SACHIN: ${{ secrets.N8N_WEBHOOK_SACHIN }}
-          POST_TOKEN_ANIMESH: ${{ secrets.POST_TOKEN_ANIMESH }}
-          POST_TOKEN_SACHIN: ${{ secrets.POST_TOKEN_SACHIN }}
 
-  # Rebuilds the public job board (GitHub Pages) from the DB.
-  # Turned off until you set the repo variable PUBLISH_SITE=true (see README → Public job board).
-  publish:
+  alerts:
     needs: scrape
-    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && vars.PUBLISH_SITE == 'true' }}   # also publish when only some searches failed
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci --omit=dev
-      - name: Build site
-        run: node src/build-site.js
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v4
-        with:
-          path: site
-      - id: deploy
-        uses: actions/deploy-pages@v4
+    # Also after a partly failed scrape: the searches that worked still brought new jobs.
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && inputs.alerts != 'no' }}
+    uses: ./.github/workflows/telegram-alerts.yml
+    secrets: inherit
+
+  posts:
+    needs: scrape
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && inputs.posts != 'no' }}
+    uses: ./.github/workflows/linkedin-posts.yml
+    with:
+      force_posts: ${{ inputs.force_posts }}
+    secrets: inherit

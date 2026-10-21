@@ -4,6 +4,7 @@
 // Usage: node src/telegram-notify.js   (needs DATABASE_URL and TELEGRAM_BOT_TOKEN; skips without the token)
 import { openDb } from './db.js';
 import { prepareJob, matches } from './telegram-match.js';
+import { loadConfig } from './config.js';
 
 const MAX_PER_RUN = 30;      // per subscriber, newest first; the rest wait for the next run
 const PER_MESSAGE = 10;
@@ -13,6 +14,12 @@ if (!token) {
     console.log('TELEGRAM_BOT_TOKEN not set, skipping Telegram alerts');
     process.exit(0);
 }
+
+// "View job" opens the job's page on the board (siteUrl in config), like the board and the LinkedIn posts do.
+const { siteUrl } = loadConfig();
+// utm_source tells the site's analytics (Umami) the visit came from a Telegram alert.
+const jobUrl = ({ job_id: jobId, url }) => (siteUrl && jobId
+    ? `${siteUrl}/job.html?id=${encodeURIComponent(jobId)}&utm_source=telegram&utm_medium=alert` : url);
 
 const escapeHtml = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -31,9 +38,10 @@ async function send(chatId, text, retry = true) {
     return { ok: false, code: data.error_code, error: data.description };
 }
 
-function formatJob({ title, company, location, workplace, url }) {
+function formatJob(job) {
+    const { title, company, location, workplace } = job;
     const where = [location, workplace === 'remote' && !/remote/i.test(location ?? '') ? 'Remote' : null].filter(Boolean).join(' · ');
-    return `<b>${escapeHtml(title)}</b>\n${escapeHtml(company ?? '')}${where ? ` · ${escapeHtml(where)}` : ''}\n<a href="${escapeHtml(url)}">View job</a>`;
+    return `<b>${escapeHtml(title)}</b>\n${escapeHtml(company ?? '')}${where ? ` · ${escapeHtml(where)}` : ''}\n<a href="${escapeHtml(jobUrl(job))}">View job</a>`;
 }
 
 const store = await openDb();

@@ -1,7 +1,7 @@
 # Job Scraper
 
 Fetches jobs with an Apify Actor (default: `curious_coder/linkedin-jobs-scraper`), stores them in
-Supabase (Postgres) and publishes a public job board on GitHub Pages.
+Supabase (Postgres) and publishes a public job board at **https://jobs.krawlr.xyz**.
 
 Searches and categories (the tabs on the site) live in Supabase. The first run adds 8 starting
 searches: frontend, backend, full stack and mobile developer jobs in India, each in an "any workplace"
@@ -23,27 +23,37 @@ The run page shows a results table (found / new / filtered / cost per search).
 Browse the data in Supabase → **Table Editor** → `jobs`, `searches`, `categories` and `runs`.
 Tables are created automatically on the first run.
 
-It runs every 2 hours when n8n starts it (see Schedule below), each time the premium searches plus
-the next `searchesPerRun` searches in the rotation. GitHub's own timer is off.
+Nothing runs on a GitHub timer. n8n starts each workflow when it should run (see Triggers below).
 
-### Schedule
+### Triggers (n8n)
 
-GitHub's own schedule was turned off because it is best effort. Runs are queued behind everyone else's, so they often start 1 to
-2.5 hours late, and some are skipped (worst at the top of the hour, so the cron uses :17). The
-concurrency group keeps at most one run waiting. For runs on time, trigger the workflow from an outside
-scheduler (n8n's Schedule node, cron-job.org, Railway cron) every 2 hours. This project uses an n8n
-workflow (Schedule Trigger every 2 hours, then an HTTP Request) that sends:
+There are no `schedule:` crons in this repo: GitHub's timer is best effort (runs started 1 to 2.5 hours
+late and some were skipped). Each job is its own workflow with a `workflow_dispatch` trigger, so n8n (or
+the Run workflow button) starts exactly what it needs, when it needs it:
+
+| Workflow | File | What it does | Inputs |
+| --- | --- | --- | --- |
+| Scrape jobs | `scrape.yml` | LinkedIn job searches, company linking, tags; then Telegram alerts and LinkedIn posts | `searches`, `alerts` (yes/no), `posts` (yes/no), `force_posts` |
+| Glassdoor salaries | `salaries.yml` | Salaries per role for companies that have none yet. Not tied to the scrape | `companies` (blank, a number, or `all`), `refresh` (yes/no) |
+| Telegram alerts | `telegram-alerts.yml` | Sends subscribers the last 24 hours' matching jobs | none |
+| LinkedIn posts | `linkedin-posts.yml` | Writes each person's post and pings their n8n. No Apify cost | `force_posts` |
+| Manage searches | `searches.yml` | Add / list / disable searches | see the form |
+| Telegram bot setup | `telegram.yml` | Points the bot at its webhook | `api_url` |
+
+To start one from n8n, an HTTP Request node sends:
 
 ```
-POST https://api.github.com/repos/<owner>/<repo>/actions/workflows/scrape.yml/dispatches
-Authorization: Bearer <fine-grained token with Actions: read and write on this repo>
+POST https://api.github.com/repos/<owner>/<repo>/actions/workflows/<file>/dispatches
+Authorization: Bearer <token with Actions: read and write on this repo>
 Accept: application/vnd.github+json
 
-{"ref": "main"}
+{"ref": "main", "inputs": {"companies": "5"}}
 ```
 
-Only one scheduler should start runs. If you bring back a `schedule:` in `scrape.yml`, turn the
-n8n one off so runs don't double up (and cost twice).
+`inputs` is optional (every input has a default) and its values are strings, e.g.
+`{"ref": "main", "inputs": {"alerts": "no", "posts": "no"}}` for a scrape alone. Each workflow has its own
+concurrency group, so a second start waits for the running one instead of doubling up; the scrape and the
+salary fetch can run at the same time (they share the Apify tokens, see below).
 
 ## Several Apify accounts
 
@@ -114,9 +124,10 @@ searches. A premium company that hasn't shown up in any job yet needs `--linkedi
 
 Every company on the site (premium ones and any company with a job in the last 30 days) gets its salaries
 from Glassdoor for the roles under `salaries.roles` in `config.yaml`, in India, with the Actor
-`axlymxp/glassdoor-salary-scraper`. They're cached in `company_salaries` for `salaries.refreshDays` (14) and
-then fetched again. After each scrape, up to `salaries.companiesPerRun` companies are fetched: never-fetched
-ones first, premium first, then the ones with most recent jobs. Each costs $0.02 plus $0.006 per role
+`axlymxp/glassdoor-salary-scraper`, and kept in `company_salaries`. A company that already has salaries
+isn't fetched again, unless the run has `refresh` = `yes` (then ones older than `salaries.refreshDays`, 14, are
+re-fetched too) or you queue it with `refresh-salaries` below. Each **Glassdoor salaries** run (`salaries.yml`, `src/salaries.js`) fetches up to
+`salaries.companiesPerRun` companies without salaries: never-fetched ones first, premium first, then the ones with most recent jobs. Each costs $0.02 plus $0.006 per role
 Glassdoor has (about $0.16 for a big company with 25 roles; roles it doesn't have cost nothing). Like the
 searches, it moves to the next Apify token when one runs out of credit.
 
@@ -126,17 +137,52 @@ different employer, the salaries are skipped; if it has no such employer, that a
 site, each job shows its company's range (lowest to highest median across roles) and opens a list of every
 role, highest first; picking a company shows the list above its jobs.
 
-To fetch every company at once (including ones with no recent jobs), run the Scrape jobs workflow with
-`salaries` = `all` (and `searches` = `none` to skip the job searches), or locally `SALARIES=all node src/run.js none`.
+To fetch every company at once (including ones with no recent jobs), run Glassdoor salaries with
+`companies` = `all`, or locally `node src/salaries.js all`.
 It stops when no Apify token has credit left; the companies it didn't reach are first in line next time.
 
 ```bash
 node src/companies.js salaries                 # fetch status per company
 node src/companies.js salaries razorpay        # one company's roles
-node src/companies.js refresh-salaries razorpay   # fetch again in the next scrape (or: all)
+node src/companies.js refresh-salaries razorpay   # fetch again in the next salaries run (or: all)
 ```
 
-## Public job board on Vercel (live from Supabase)
+## Public job board at jobs.krawlr.xyz (live from Supabase)
+
+The board lives at **https://jobs.krawlr.xyz**. Two hosts, each with one job:
+
+| What | Where | Config |
+| --- | --- | --- |
+| Pages (`web/` minus `web/api`) | Netlify, custom domain `jobs.krawlr.xyz` | `netlify.toml`; `siteUrl` in `config/config.yaml` |
+| Functions (`web/api/*.mjs`: Telegram webhook, `/api/post-status`) | Vercel, `job-scraper-web-beryl.vercel.app` | `vercel.json` / `web/vercel.json`; `apiUrl` in `config/config.yaml` |
+
+- LinkedIn posts, the post picture and Telegram alerts link to `siteUrl`. The Telegram webhook and n8n's
+  post reports use `apiUrl`.
+- `netlify.toml` builds `dist/` from `web/` without `web/api`, proxies `jobs.krawlr.xyz/api/*` to Vercel
+  (so either URL reaches the functions), and sends the old `*.netlify.app` address to the custom domain.
+  Git-connected Netlify deploys read it on every push to `main`; from the CLI, run
+  `netlify deploy --build --prod` in the repo root.
+- On Vercel every page now redirects (301) to the same path on `jobs.krawlr.xyz`, so old post links keep
+  working; only `/api/*` is still served there. The redirect is in both `vercel.json` (Root Directory = repo
+  root) and `web/vercel.json` (Root Directory = `web`), whichever the Vercel project uses.
+- Moving the domain again: change `siteUrl`, the canonical/`og:url` tags in `web/*.html`, `web/sitemap.xml`,
+  `web/robots.txt` and the redirect targets in `netlify.toml` / `vercel.json`. Moving the API: change `apiUrl`,
+  the `/api/*` proxy in `netlify.toml`, then run **Telegram bot setup** again.
+
+### Analytics (Umami)
+
+Every page loads Umami (`data-website-id` in each page's `<head>`). Page views show under **Pages**
+(`/job.html?id=…` is one job). `web/analytics.js` adds custom events, under **Events** (open an event to break
+it down by its properties):
+
+| Event | When | Properties |
+| --- | --- | --- |
+| `job-view` | a job page loads | `id`, `title`, `company`, `location`, `category`, `from` (utm_source or the linking site) |
+| `apply-click` | Apply on LinkedIn / Apply now | same as `job-view` |
+| `board-filter` | a board filter or search held for 2 s | `category`, `workplace`, `company`, `premium`, `q` |
+| `alert-view` | a hiring-alert page loads | `id` |
+
+Telegram alert links carry `utm_source=telegram`, so they show under Sources → UTM too.
 
 `web/` is a static page. With a Supabase URL and anon key in `web/config.js`, it reads jobs live
 from the view `public_jobs`, so new jobs show up right after each scrape without a redeploy.
@@ -147,40 +193,27 @@ from the view `public_jobs`, so new jobs show up right after each scrape without
 2. **Fill in `web/config.js`** with the Project URL and the anon (or publishable) key from
    Supabase → Project Settings → API, and push. Both are meant to be public.
    **Never** put the `service_role` / secret key or `DATABASE_URL` there.
-3. **Vercel → Add New → Project → import this repo** and deploy. `vercel.json` tells Vercel to
-   serve `web/` as static files with no install or build, so leave Root Directory at the repo root.
-   Each push to `main` redeploys.
+3. **Netlify → Add new site → Import an existing project → this repo**. It reads `netlify.toml`, so no
+   build settings are needed. Add the custom domain under Domain management. For the functions,
+   **Vercel → Add New → Project → import this repo** too (see the table above).
 
 Supabase's Security Advisor may flag `public_jobs` as a "security definer" view. That is on
 purpose: it is how the view shows only these columns while the table stays locked.
 
-With `web/config.js` left empty, the page loads `jobs.json` instead, as on GitHub Pages below.
+With `web/config.js` left empty, the page loads `jobs.json` instead (see the static copy below).
 
-## Public job board (GitHub Pages)
-
-After each scrape, the `publish` job builds a static page from the DB (`web/index.html` +
-`jobs.json`) and deploys it. It is **off until you turn it on**:
-
-1. **Make Pages available.** On a free GitHub account, Pages only works on **public** repos.
-   Either make this repo public (Settings → General → Danger Zone → Change visibility; secrets stay
-   hidden) or use GitHub Pro.
-2. **Settings → Pages → Build and deployment → Source: GitHub Actions.**
-3. **Settings → Secrets and variables → Actions → Variables tab → New repository variable:**
-   `PUBLISH_SITE` = `true`.
-4. Run **Scrape jobs**. The site is at **https://animesh9893.github.io/job-scraper/**, and the
-   link also shows on the run page.
-
-What the page has:
+What the board has:
 - Category tabs from the `categories` table, workplace filter (Remote / Hybrid / On-site), search
   box, and counts on each filter.
 - Jobs load 25 at a time as you scroll, filtered in Supabase, so the page stays fast as the list grows.
   Cards off screen are skipped by the browser's renderer.
-- Filters are kept in the URL, so you can share views like `…/job-scraper/?category=backend&workplace=remote`.
+- Filters are kept in the URL, so you can share views like `jobs.krawlr.xyz/?category=backend&workplace=remote`.
 - Only public listing fields are published (title, company, location, category, workplace, job
   link, dates). No descriptions, raw data or job-poster details.
 - Shows jobs first seen in the last `site.maxAgeDays` days (`config.yaml`). Light and dark mode, works on phones.
 
-Preview locally: `DATABASE_URL=... node src/build-site.js && npx serve site`
+Static copy without Supabase keys (the old GitHub Pages build, no longer deployed):
+`DATABASE_URL=... node src/build-site.js && npx serve site`
 
 ## Run it locally (optional)
 
@@ -258,13 +291,13 @@ first three tags on each job.
 
 ## Workflows
 
-- `scrape.yml`: "Run workflow" button (and n8n's 2-hourly dispatch) that scrapes and stores jobs, then
-  publishes the job board (when `PUBLISH_SITE=true`).
+- `scrape.yml`, `salaries.yml`, `telegram-alerts.yml`, `linkedin-posts.yml`, `searches.yml`, `telegram.yml`:
+  started by hand or from n8n (Triggers, above). None has a timer.
 - `ci.yml`: on every push, checks syntax and that `config.yaml` loads.
 
 ## Keeping the public repo safe
 
-The workflows that use secrets (Scrape jobs, Manage searches) only run on `main`, and only from the
+The workflows that use secrets (all but CI) only run on `main`, and only from the
 Run workflow button or its API, which needs write access. CI runs on pull requests with a
 read-only token and no secrets, so a pull request from a fork can't read `DATABASE_URL` or the
 Apify tokens, even if it changes a workflow file.
@@ -294,7 +327,7 @@ A job is sent when any keyword matches (and a location, if set). Jobs first seen
 
 How it fits together: the bot's messages go to the Vercel function `web/api/telegram.mjs`, which saves
 each person's keywords in the Supabase table `telegram_subscribers` with the secret key. After each
-scrape, the Scrape jobs workflow runs `src/telegram-notify.js`, which matches new jobs and sends them.
+scrape (or when you run **Telegram alerts**), `src/telegram-notify.js` matches new jobs and sends them.
 Both tables have RLS with no policies, so the site's public key can't read them.
 
 Setup:
@@ -306,4 +339,4 @@ Setup:
    API Keys → secret key, or the legacy `service_role` key). Redeploy so the function picks them up.
 4. **GitHub → Settings → Secrets and variables → Actions**: add `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET`.
 5. Run **Scrape jobs** once, so the tables exist, then **Actions → Telegram bot setup → Run workflow**
-   with your site URL. It prints the bot's link; open it and send `/start`.
+   (it uses `apiUrl` from `config/config.yaml`; or type another API URL). It prints the bot's link; open it and send `/start`.

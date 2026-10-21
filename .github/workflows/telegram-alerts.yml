@@ -1,0 +1,31 @@
+name: Telegram alerts
+
+# Sends Telegram subscribers the jobs first seen in the last 24 hours that match their keywords
+# (src/telegram-notify.js; each job reaches a person once). Runs after Scrape jobs, or on its own.
+on:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  alerts:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: telegram-alerts      # two at once could send a job twice
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --omit=dev
+      - name: Send Telegram alerts
+        run: node src/telegram-notify.js   # skips itself without the secret
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}

@@ -36,10 +36,11 @@ premium:
   lookupsPerRun: 3
 
 # Glassdoor salaries per role (table company_salaries), shown on the site as a range with a per-role list.
-# After each scrape, up to companiesPerRun companies (premium first, then the ones with most recent jobs)
-# that were never fetched, or were fetched more than refreshDays ago, are fetched for every role below: one
-# Actor run each, $0.02 plus $0.006 per role Glassdoor has (roles it doesn't have cost nothing). In between,
-# the cached salaries are used. A failed fetch is retried a day later. companiesPerRun: 0 turns it off.
+# Each Glassdoor salaries run (salaries.yml, src/salaries.js) fetches up to companiesPerRun companies that have
+# no salaries yet (premium first, then the ones with most recent jobs), every role below: one Actor run each,
+# $0.02 plus $0.006 per role Glassdoor has. Companies with salaries are kept as they are; the workflow input
+# refresh=yes also re-fetches ones older than refreshDays. A failed fetch is retried a day later.
+# companiesPerRun: 0 turns it off.
 salaries:
   actor: axlymxp/glassdoor-salary-scraper
   companiesPerRun: 5
@@ -82,6 +83,12 @@ filters:
   excludeTitleWords: [intern, unpaid]
   excludeCompanies: []
 
+# Where things live. siteUrl is the public job board (Netlify, custom domain): LinkedIn posts, Telegram alerts and
+# the post picture link here. apiUrl is where the serverless functions in web/api run (Vercel): the Telegram bot's
+# webhook and n8n's /api/post-status. Netlify serves the pages only; jobs.krawlr.xyz/api/* is proxied to apiUrl.
+siteUrl: https://jobs.krawlr.xyz
+apiUrl: https://job-scraper-web-beryl.vercel.app
+
 # Public job board (GitHub Pages)
 site:
   title: India & Remote Tech Jobs
@@ -93,7 +100,8 @@ site:
 # is pinged (GitHub secret N8N_WEBHOOK_<ID>, e.g. N8N_WEBHOOK_ANIMESH) to email the post for approval and
 # publish it. Setup: n8n/README.md.
 linkedin:
-  siteUrl: https://job-scraper-web-beryl.vercel.app # the job board; posts link each job to its /job.html page and end with the home page
+  # Posts link each job to its /job.html page on siteUrl (above) and end with the home page. Set linkedin.siteUrl only
+  # to send posts somewhere else.
   everyHours: 4         # at most one post per person this often; scrapes in between keep their jobs for the next post
   jobsPerPost: 10
   minJobs: 10           # no post for a person who would get fewer new jobs than this; they wait for the next one
