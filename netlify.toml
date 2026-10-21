@@ -4,7 +4,8 @@
 
 [build]
   # Copy web/ without the Vercel functions and Vercel's own config, so they are not published as plain files.
-  command = "rm -rf dist && cp -R web dist && rm -rf dist/api dist/vercel.json"
+  # Works from the repo root and with the site's Base directory set to web (then publish is web/dist).
+  command = "SRC=$([ -d web ] && echo web || echo .); OUT=$(mktemp -d); cp -R \"$SRC\"/. \"$OUT\" && rm -rf \"$OUT\"/api \"$OUT\"/vercel.json \"$OUT\"/dist && rm -rf dist && mv \"$OUT\" dist"
   publish = "dist"
 
 # The old Netlify address goes to the custom domain.
