@@ -107,8 +107,10 @@ LinkedIn has no bold or italic, so the heading, labels and company names use Uni
 Unicode italic ones, the way LinkedIn formatters do it. Job titles and hashtags stay plain so LinkedIn search finds
 them.
 
-Hashtags: the ones in `linkedin.hashtags`, then the jobs' four most common roles, eight most named technologies,
-four most common cities (plus `#remotejobs` when a job is remote) and six companies, then `linkedin.fillerHashtags`,
+Hashtags: the ones in `linkedin.hashtags`, then the jobs' four most common roles, up to three countries (`#india
+#indiajobs`, `#usa #usajobs`, `#uk #ukjobs`), `#remote #remotejobs #workfromhome` when a job is remote and `#hybrid
+#hybridwork` when one is hybrid, four most common cities (`#punejobs`, with LinkedIn's "Pune Division" or "Bengaluru
+East" shortened to the city), eight most named technologies and six companies, then `linkedin.fillerHashtags`,
 up to `linkedin.maxHashtags` (25). A post that would pass LinkedIn's 3,000 characters drops hashtags from the end
 first (down to 5). The check allows 1 to 30.
 

@@ -46,12 +46,43 @@ export function plain(text) {
     }).join('');
 }
 
-// "Bengaluru, Karnataka, India" → "Bengaluru"; remote jobs say so.
+// "Bengaluru East, Karnataka, India" → "Bengaluru"; remote jobs say so.
 function where({ location, workplace }) {
-    const city = String(location ?? '').split(',')[0].trim();
+    if (!String(location ?? '').includes(',') && country(location)) return '';     // just "India" or "United States"
+    const city = cityName(location) || String(location ?? '').split(',')[0].trim();
     if (workplace === 'remote') return /remote/i.test(city) || !city ? 'Remote' : `${city} (Remote)`;
     return city;
 }
+
+// LinkedIn's districts and metro areas → the city people search for: "Pune Division" → "Pune",
+// "Bengaluru East" → "Bengaluru", "Greater Hyderabad Area" → "Hyderabad", "Bangalore" → "Bengaluru".
+const CITY_NAMES = { bangalore: 'Bengaluru', gurgaon: 'Gurugram', bombay: 'Mumbai', 'new delhi': 'Delhi' };
+export function cityName(location) {
+    if (!String(location ?? '').includes(',') && country(location)) return '';     // just "India" or "United States"
+    const city = String(location ?? '').split(',')[0].trim()
+        .replace(/^Greater\s+/i, '')
+        .replace(/\s+(Metropolitan Region|Metropolitan Area|Area|Division|District|Region|Urban|Rural|East|West|North|South|Central)$/i, '')
+        .trim();
+    if (!city || /remote|worldwide/i.test(city)) return '';
+    return CITY_NAMES[city.toLowerCase()] ?? city;
+}
+
+// The country hashtag of a location: "Pune, Maharashtra, India" → "india", "Austin, TX" → "usa", "London Area,
+// United Kingdom" → "uk". Unknown or missing countries give ''.
+const COUNTRY_TAGS = {
+    'united states': 'usa', 'united states of america': 'usa', us: 'usa', usa: 'usa', 'united kingdom': 'uk', uk: 'uk',
+    england: 'uk', 'united arab emirates': 'uae', uae: 'uae', 'the netherlands': 'netherlands',
+};
+export function country(location) {
+    const parts = String(location ?? '').split(',').map((p) => p.trim()).filter(Boolean);
+    const last = parts.at(-1) ?? '';
+    if (!last || /remote|worldwide/i.test(last)) return '';
+    if (parts.length > 1 && /^[A-Z]{2}$/.test(last)) return 'usa';                 // "Austin, TX"
+    const tag = COUNTRY_TAGS[last.toLowerCase()] ?? hashtag(last);
+    return parts.length > 1 || COUNTRIES.has(tag) ? tag : '';                    // a lone "Bengaluru" is a city
+}
+const COUNTRIES = new Set(['usa', 'uk', 'uae', 'india', 'canada', 'germany', 'singapore', 'australia', 'france', 'ireland',
+    'netherlands', 'spain', 'poland', 'japan', 'brazil', 'mexico', 'israel', 'sweden', 'switzerland', 'portugal']);
 
 // "Node.js" → "nodejs", "C++" → "cpp", "C#" → "csharp", "Machine Learning" → "machinelearning".
 const hashtag = (tag) => tag.toLowerCase().replace(/\+\+/g, 'pp').replace(/#/g, 'sharp').replace(/[^a-z0-9]/g, '');
@@ -71,18 +102,20 @@ function mostCommon(values, n) {
 }
 
 /**
- * Hashtags for a post: the configured ones, then its jobs' roles, top tech, cities and companies, then the general
- * `filler` ones until there are max.
+ * Hashtags for a post: the configured ones, then its jobs' roles, countries (#india #indiajobs), remote/hybrid,
+ * cities, top tech and companies, then the general `filler` ones until there are max.
  */
 export function postHashtags(jobs, hashtags = [], max = 10, filler = []) {
-    const remote = jobs.some((j) => j.workplace === 'remote');
-    const cities = jobs.filter((j) => j.workplace !== 'remote').map((j) => where(j));
+    const has = (workplace) => jobs.some((j) => j.workplace === workplace);
+    const cities = jobs.filter((j) => j.workplace !== 'remote').map((j) => cityName(j.location));
     return [...new Set([
         ...hashtags,
         ...mostCommon(jobs.map((j) => ROLE_TAGS[j.role]), 4),
-        ...mostCommon(jobs.flatMap((j) => j.tags ?? []), 8).map(hashtag),
+        ...mostCommon(jobs.map((j) => country(j.location)), 3).flatMap((c) => [c, `${c}jobs`]),
+        ...(has('remote') ? ['remote', 'remotejobs', 'workfromhome'] : []),
+        ...(has('hybrid') ? ['hybrid', 'hybridwork'] : []),
         ...mostCommon(cities, 4).map((c) => `${hashtag(c)}jobs`),
-        ...(remote ? ['remotejobs'] : []),
+        ...mostCommon(jobs.flatMap((j) => j.tags ?? []), 8).map(hashtag),
         ...mostCommon(jobs.map((j) => j.company), 6).map((c) => hashtag(c)).filter((t) => t.length <= 20),
         ...filler,
     ].map(hashtag).filter(Boolean))].slice(0, max);

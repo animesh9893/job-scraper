@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { splitJobs, buildPost, checkPost, plain, bold, italic, payFor, payRoles, jobLink, postHashtags, retarget } from '../src/linkedin-posts.js';
+import { splitJobs, buildPost, checkPost, plain, bold, italic, payFor, payRoles, jobLink, postHashtags, retarget, cityName, country } from '../src/linkedin-posts.js';
 import { postImageSvg, renderPostImage, pickCompanies, loadLogos, MAX_FEATURED } from '../src/post-image.js';
 
 const people = [{ id: 'animesh' }, { id: 'sachin' }];
@@ -42,7 +42,7 @@ test('post follows the template and passes the check', () => {
     assert.doesNotMatch(body, /linkedin\.com/);
     assert.match(plain(body), /🔥 In demand: React, C\+\+, TypeScript/);
     assert.match(body, /https:\/\/jobs\.example\.com\/$/m);
-    assert.equal(lines.at(-1), '#hiring #react #cpp #typescript #bengalurujobs #remotejobs #co0 #co1 #co2');
+    assert.equal(lines.at(-1), '#hiring #india #indiajobs #remote #remotejobs #workfromhome #bengalurujobs #react #cpp #typescript');
     assert.deepEqual(checkPost(body), []);
 });
 
@@ -103,16 +103,36 @@ test('the n8n workflow runs the same template check', async () => {
     assert.equal(code.split('function plain(').length, 2, 'plain() is in the workflow once');
 });
 
-test('hashtags: configured ones, then roles, tech, cities, companies and filler, without repeats, up to the limit', () => {
+test('hashtags: configured ones, then roles, countries, remote, cities, tech, companies and filler, without repeats, up to the limit', () => {
     const jobs = [
         job(1, { role: 'backend', tags: ['Java', 'Kafka'] }),
         job(2, { role: 'backend', tags: ['Java'], location: 'Pune, Maharashtra, India' }),
         job(3, { role: 'ml', tags: ['Machine Learning'], workplace: 'remote' }),
     ];
     assert.deepEqual(postHashtags(jobs, ['hiring', 'MachineLearning'], 30, ['jobs', 'Hiring']),
-        ['hiring', 'machinelearning', 'backenddeveloper', 'java', 'kafka', 'bengalurujobs', 'punejobs', 'remotejobs',
-            'co0', 'co1', 'co2', 'jobs']);
+        ['hiring', 'machinelearning', 'backenddeveloper', 'india', 'indiajobs', 'remote', 'remotejobs', 'workfromhome',
+            'bengalurujobs', 'punejobs', 'java', 'kafka', 'co0', 'co1', 'co2', 'jobs']);
     assert.equal(postHashtags(jobs, ['hiring'], 4).length, 4);
+    assert.deepEqual(postHashtags([job(1, { location: 'Austin, TX', workplace: 'hybrid' })], [], 30).slice(0, 5),
+        ['usa', 'usajobs', 'hybrid', 'hybridwork', 'austinjobs']);
+});
+
+test('places: LinkedIn districts become cities, and the country comes from the last part', () => {
+    const cases = {
+        'Pune Division, Maharashtra, India': ['Pune', 'india'],
+        'Bengaluru East, Karnataka, India': ['Bengaluru', 'india'],
+        'Bangalore Urban, Karnataka, India': ['Bengaluru', 'india'],
+        'Greater Hyderabad Area': ['Hyderabad', ''],
+        'London Area, United Kingdom': ['London', 'uk'],
+        'New York, NY': ['New York', 'usa'],
+        'United States': ['', 'usa'],
+        Bengaluru: ['Bengaluru', ''],
+        Remote: ['', ''],
+    };
+    for (const [location, [city, land]] of Object.entries(cases)) {
+        assert.equal(cityName(location), city, location);
+        assert.equal(country(location), land, location);
+    }
 });
 
 test('picture: the post\'s companies get cards, premium then most jobs first; the strip skips them', () => {
