@@ -1,0 +1,45 @@
+name: LinkedIn posts
+
+# Writes one LinkedIn hiring-alert post per person in config linkedin.people from the newest jobs and pings
+# their n8n (src/linkedin-posts.js; n8n/README.md). Runs after Scrape jobs, or on its own. No Apify cost.
+on:
+  workflow_dispatch:
+    inputs:
+      force_posts:
+        description: 'yes = write posts now, even if the last one is newer than linkedin.everyHours'
+        required: false
+        default: ''
+  workflow_call:
+    inputs:
+      force_posts:
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  posts:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: linkedin-posts       # two at once could put the same jobs in two posts
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --omit=dev
+      - name: Write LinkedIn posts and ping n8n
+        run: node src/linkedin-posts.js
+        env:
+          FORCE_POSTS: ${{ inputs.force_posts }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          N8N_WEBHOOK_ANIMESH: ${{ secrets.N8N_WEBHOOK_ANIMESH }}
+          N8N_WEBHOOK_SACHIN: ${{ secrets.N8N_WEBHOOK_SACHIN }}
+          POST_TOKEN_ANIMESH: ${{ secrets.POST_TOKEN_ANIMESH }}
+          POST_TOKEN_SACHIN: ${{ secrets.POST_TOKEN_SACHIN }}

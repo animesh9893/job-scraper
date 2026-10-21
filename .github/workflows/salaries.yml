@@ -1,0 +1,37 @@
+name: Glassdoor salaries
+
+# Glassdoor salaries per role for companies never fetched or due a refresh (src/salaries.js). Not tied to the
+# job scrape: start it whenever you want (button, or n8n via POST …/actions/workflows/salaries.yml/dispatches).
+on:
+  workflow_dispatch:
+    inputs:
+      companies:
+        description: 'How many companies (blank = salaries.companiesPerRun, a number, or all = every company due)'
+        required: false
+        default: ''
+
+concurrency:
+  group: salaries
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  salaries:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 300          # "all" is about 45s per company
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --omit=dev
+      - name: Fetch salaries
+        run: node src/salaries.js "$COMPANIES"
+        env:
+          COMPANIES: ${{ inputs.companies }}
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}

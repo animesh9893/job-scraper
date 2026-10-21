@@ -6,6 +6,7 @@
   "description": "Fetch jobs via an Apify Actor and store them in Supabase",
   "scripts": {
     "scrape": "node src/run.js",
+    "salaries": "node src/salaries.js",
     "stats": "node src/stats.js",
     "searches": "node src/searches.js",
     "companies": "node src/companies.js",

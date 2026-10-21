@@ -36,7 +36,7 @@ premium:
   lookupsPerRun: 3
 
 # Glassdoor salaries per role (table company_salaries), shown on the site as a range with a per-role list.
-# After each scrape, up to companiesPerRun companies (premium first, then the ones with most recent jobs)
+# Each Glassdoor salaries run (salaries.yml, src/salaries.js) fetches up to companiesPerRun companies (premium first, then the ones with most recent jobs)
 # that were never fetched, or were fetched more than refreshDays ago, are fetched for every role below: one
 # Actor run each, $0.02 plus $0.006 per role Glassdoor has (roles it doesn't have cost nothing). In between,
 # the cached salaries are used. A failed fetch is retried a day later. companiesPerRun: 0 turns it off.
