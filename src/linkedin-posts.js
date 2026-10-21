@@ -194,6 +194,25 @@ async function ping(url, token, payload) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 }
 
+/** The post's links on any of oldUrls (the board's earlier addresses) moved to siteUrl. */
+export function retarget(body, oldUrls, siteUrl) {
+    const site = siteUrl.replace(/\/$/, '');
+    return oldUrls.reduce((text, old) => text.split(old.replace(/\/$/, '')).join(site), String(body ?? ''));
+}
+
+// Drafts written before the board moved (linkedin.oldSiteUrls): links point at the new address, and the picture,
+// which shows the address, is drawn again by drawImages.
+async function moveDrafts(store, oldUrls, siteUrl) {
+    if (!oldUrls.length) return;
+    const { rows } = await store.query(`SELECT id, body FROM posts WHERE status = 'draft' AND body IS NOT NULL`);
+    for (const { id, body } of rows) {
+        const moved = retarget(body, oldUrls, siteUrl);
+        if (moved === body) continue;
+        await store.query('UPDATE posts SET body = $2, image = NULL WHERE id = $1', [id, moved]);
+        console.log(`  ↪ post ${id}: links moved to ${siteUrl}`);
+    }
+}
+
 // Draws the picture of every draft post that has none yet (new posts, and drafts from before pictures): a card
 // for each of its companies with their roles, and a strip of the board's top premium companies.
 async function drawImages(store, siteUrl) {
@@ -276,6 +295,7 @@ async function main() {
             made.push({ person, id, jobs: jobs.length });
             console.log(`  ✔ ${person.id}: post ${id} with ${jobs.length} job(s)`);
         }
+        await moveDrafts(store, cfg.oldSiteUrls, cfg.siteUrl);
         await drawImages(store, cfg.siteUrl);
     } finally {
         await store.close();
