@@ -34,7 +34,7 @@ the Run workflow button) starts exactly what it needs, when it needs it:
 | Workflow | File | What it does | Inputs |
 | --- | --- | --- | --- |
 | Scrape jobs | `scrape.yml` | LinkedIn job searches, company linking, tags; then Telegram alerts and LinkedIn posts | `searches`, `alerts` (yes/no), `posts` (yes/no), `force_posts` |
-| Glassdoor salaries | `salaries.yml` | Salaries per role for companies due a refresh. Not tied to the scrape | `companies` (blank, a number, or `all`) |
+| Glassdoor salaries | `salaries.yml` | Salaries per role for companies that have none yet. Not tied to the scrape | `companies` (blank, a number, or `all`), `refresh` (yes/no) |
 | Telegram alerts | `telegram-alerts.yml` | Sends subscribers the last 24 hours' matching jobs | none |
 | LinkedIn posts | `linkedin-posts.yml` | Writes each person's post and pings their n8n. No Apify cost | `force_posts` |
 | Manage searches | `searches.yml` | Add / list / disable searches | see the form |
@@ -124,9 +124,10 @@ searches. A premium company that hasn't shown up in any job yet needs `--linkedi
 
 Every company on the site (premium ones and any company with a job in the last 30 days) gets its salaries
 from Glassdoor for the roles under `salaries.roles` in `config.yaml`, in India, with the Actor
-`axlymxp/glassdoor-salary-scraper`. They're cached in `company_salaries` for `salaries.refreshDays` (14) and
-then fetched again. Each **Glassdoor salaries** run (`salaries.yml`, `src/salaries.js`) fetches up to
-`salaries.companiesPerRun` companies: never-fetched ones first, premium first, then the ones with most recent jobs. Each costs $0.02 plus $0.006 per role
+`axlymxp/glassdoor-salary-scraper`, and kept in `company_salaries`. A company that already has salaries
+isn't fetched again, unless the run has `refresh` = `yes` (then ones older than `salaries.refreshDays`, 14, are
+re-fetched too) or you queue it with `refresh-salaries` below. Each **Glassdoor salaries** run (`salaries.yml`, `src/salaries.js`) fetches up to
+`salaries.companiesPerRun` companies without salaries: never-fetched ones first, premium first, then the ones with most recent jobs. Each costs $0.02 plus $0.006 per role
 Glassdoor has (about $0.16 for a big company with 25 roles; roles it doesn't have cost nothing). Like the
 searches, it moves to the next Apify token when one runs out of credit.
 

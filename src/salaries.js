@@ -1,4 +1,6 @@
-// Glassdoor salaries per role for companies never fetched or due a refresh (cached for salaries.refreshDays).
+// Glassdoor salaries per role for companies that have none yet. Companies with salaries are left alone, unless
+// REFRESH=yes, which also re-fetches the ones older than salaries.refreshDays. (A single company can be queued
+// again with: node src/companies.js refresh-salaries <slug>.)
 // Separate from the job scrape (src/run.js), so each can be started on its own (workflow salaries.yml, from n8n).
 // Usage: node src/salaries.js          → up to salaries.companiesPerRun companies (premium and recent-job ones first)
 //        node src/salaries.js <n>      → up to n companies
@@ -39,8 +41,10 @@ const tokenLabel = () => credit.current()?.label;
 
 const sal = config.salaries;
 const salaryLimit = salaryMode === 'all' ? null : Number(salaryMode || sal.companiesPerRun);
+const refresh = /^(yes|true|1)$/i.test(process.env.REFRESH ?? '');
 const salaryCompanies = salaryLimit === null || salaryLimit > 0
-    ? await store.companiesForSalaries(salaryLimit, sal.refreshDays, { everyCompany: salaryMode === 'all' }) : [];
+    ? await store.companiesForSalaries(salaryLimit, sal.refreshDays, { everyCompany: salaryMode === 'all', refresh }) : [];
+console.log(refresh ? `Missing salaries, plus ones older than ${sal.refreshDays} days` : 'Only companies without salaries');
 const salaryResults = [];
 let salaryCost = 0;
 if (salaryCompanies.length) console.log(`Salaries: ${salaryCompanies.map((c) => c.slug).join(', ')}`);
@@ -90,7 +94,7 @@ await credit.finish();
 await store.close();
 console.log(salaryCompanies.length
     ? `\nDone: salaries for ${salaryCompanies.length} company(ies), ~$${salaryCost.toFixed(4)} Apify cost`
-    : '\nDone: no company is due for salaries');
+    : `\nDone: no company ${refresh ? 'is due for' : 'is missing'} salaries`);
 
 // In GitHub Actions, also show a results table on the run's summary page.
 if (process.env.GITHUB_STEP_SUMMARY && salaryResults.length) {
