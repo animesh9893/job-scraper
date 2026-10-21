@@ -4,3 +4,5 @@ site
 .vercel
 dist
 web/dist
+jobs.json
+__pycache__

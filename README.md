@@ -39,6 +39,7 @@ the Run workflow button) starts exactly what it needs, when it needs it:
 | LinkedIn posts | `linkedin-posts.yml` | Writes each person's post and pings their n8n. No Apify cost | `force_posts` |
 | Manage searches | `searches.yml` | Add / list / disable searches | see the form |
 | Telegram bot setup | `telegram.yml` | Points the bot at its webhook | `api_url` |
+| LinkedIn jobs (Python) | `linkedin-jobspy.yml` | Scrapes LinkedIn with JobSpy (no Apify) and POSTs the jobs to `JOBS_POST_URL`. Not tied to the scrape | `keywords`, `location`, `hours_old`, `results`, `descriptions`, `dry_run` |
 
 To start one from n8n, an HTTP Request node sends:
 
@@ -293,7 +294,44 @@ first three tags on each job.
 
 - `scrape.yml`, `salaries.yml`, `telegram-alerts.yml`, `linkedin-posts.yml`, `searches.yml`, `telegram.yml`:
   started by hand or from n8n (Triggers, above). None has a timer.
+- `linkedin-jobspy.yml`: the Python scraper below. Started from n8n; on a PR that changes `python/` it does a
+  small dry run (no secrets, nothing posted) to check LinkedIn still answers.
 - `ci.yml`: on every push, checks syntax and that `config.yaml` loads.
+
+### Python LinkedIn scraper (JobSpy)
+
+`python/linkedin_jobspy.py` uses [JobSpy](https://github.com/speedyapply/JobSpy) (`python-jobspy`, MIT) to read
+LinkedIn's public job search, the same pages a logged-out visitor sees, so it needs no LinkedIn account, cookie
+or Apify credit. It searches each keyword, drops jobs already found by an earlier keyword, and POSTs them as JSON
+to a URL of your choice, in batches of 200:
+
+```
+POST <JOBS_POST_URL>
+Content-Type: application/json
+Authorization: Bearer <JOBS_POST_TOKEN>      (only if that secret is set)
+
+{"source": "linkedin", "scraper": "python-jobspy", "run_id": "…", "scraped_at": "2026-10-21T02:36:31Z",
+ "searches": ["software engineer"], "location": "India", "hours_old": 24,
+ "batch": 1, "batches": 1, "total": 42, "count": 42,
+ "jobs": [{"id": "li-4312345678", "search": "software engineer", "title": "…", "company": "…",
+           "company_url": "…", "location": "Bengaluru, Karnataka, India", "job_url": "https://www.linkedin.com/jobs/view/4312345678",
+           "job_url_direct": null, "date_posted": "2026-10-20", "job_type": "fulltime", "is_remote": false,
+           "job_level": null, "job_function": null, "company_industry": null, "salary_min": null,
+           "salary_max": null, "salary_currency": null, "salary_interval": null, "description": null}]}
+```
+
+A 4xx answer other than 408/429 fails the run at once; anything else is retried 3 times. `job_level`,
+`job_function`, `company_industry` and `description` are only filled with `descriptions: yes` (one extra
+request per job). Repo secrets (Settings → Secrets and variables → Actions), never in code since the repo is public:
+
+| Secret | |
+| --- | --- |
+| `JOBS_POST_URL` | Where to POST, e.g. `http://203.0.113.7:8080/jobs`. Required unless `dry_run: yes` |
+| `JOBS_POST_TOKEN` | Optional bearer token your endpoint checks |
+| `JOBSPY_PROXIES` | Optional, comma-separated `user:pass@host:port`. LinkedIn rate-limits busy IPs (HTTP 429); GitHub runners share IPs, so add proxies if runs start coming back empty |
+
+Locally: `pip install -r python/requirements.txt`, then
+`DRY_RUN=yes KEYWORDS="software engineer,data engineer" python python/linkedin_jobspy.py` writes `jobs.json`.
 
 ## Keeping the public repo safe
 

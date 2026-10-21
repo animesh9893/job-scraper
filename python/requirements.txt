@@ -1,0 +1,2 @@
+python-jobspy==1.4.0
+requests>=2.32,<3
