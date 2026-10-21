@@ -23,9 +23,16 @@ export function loadConfig() {
         premium: { keywords: 'software engineer', location: 'India', intervalHours: 6, jobsPerSearch: 25, companiesPerSearch: 10, lookupsPerRun: 3, ...config.premium },
         salaries: { actor: 'axlymxp/glassdoor-salary-scraper', companiesPerRun: 2, refreshDays: 14, location: 'India',
             locationType: 'country', roles: ['Software Engineer'], ...config.salaries },
+        siteUrl: trimUrl(config.siteUrl),
+        apiUrl: trimUrl(config.apiUrl ?? config.siteUrl),
         site: { title: 'Tech Jobs', maxAgeDays: 30, maxJobs: 1000, ...config.site },
-        linkedin: { siteUrl: '', everyHours: 0, jobsPerPost: 6, minJobs: 3, hashtags: [], maxHashtags: 10, fillerHashtags: [], people: [], ...config.linkedin },
+        linkedin: { everyHours: 0, jobsPerPost: 6, minJobs: 3, hashtags: [], maxHashtags: 10, fillerHashtags: [], people: [], ...config.linkedin, siteUrl: trimUrl(config.linkedin?.siteUrl ?? config.siteUrl) },
     };
+}
+
+// 'https://x.dev/' → 'https://x.dev'; missing → ''.
+function trimUrl(url) {
+    return String(url ?? '').trim().replace(/\/+$/, '');
 }
 
 export function requireEnv(name) {

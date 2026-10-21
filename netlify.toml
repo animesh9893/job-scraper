@@ -1,0 +1,32 @@
+# Netlify serves the job board at https://jobs.krawlr.xyz (pages only). The serverless functions in web/api
+# (Telegram webhook, n8n's /api/post-status) stay on Vercel; /api/* here is proxied there, so both URLs work.
+# Git-connected deploys pick this file up; from the CLI run `netlify deploy --build --prod` in the repo root.
+
+[build]
+  # Copy web/ without the Vercel functions and Vercel's own config, so they are not published as plain files.
+  command = "rm -rf dist && cp -R web dist && rm -rf dist/api dist/vercel.json"
+  publish = "dist"
+
+# The old Netlify address goes to the custom domain.
+[[redirects]]
+  from = "https://job-scraper-animesh9893.netlify.app/*"
+  to = "https://jobs.krawlr.xyz/:splat"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/api/*"
+  to = "https://job-scraper-web-beryl.vercel.app/api/:splat"
+  status = 200
+  force = true
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+[[headers]]
+  for = "/posts.html"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"

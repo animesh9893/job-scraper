@@ -1,7 +1,7 @@
 # Job Scraper
 
 Fetches jobs with an Apify Actor (default: `curious_coder/linkedin-jobs-scraper`), stores them in
-Supabase (Postgres) and publishes a public job board on GitHub Pages.
+Supabase (Postgres) and publishes a public job board at **https://jobs.krawlr.xyz**.
 
 Searches and categories (the tabs on the site) live in Supabase. The first run adds 8 starting
 searches: frontend, backend, full stack and mobile developer jobs in India, each in an "any workplace"
@@ -136,7 +136,27 @@ node src/companies.js salaries razorpay        # one company's roles
 node src/companies.js refresh-salaries razorpay   # fetch again in the next scrape (or: all)
 ```
 
-## Public job board on Vercel (live from Supabase)
+## Public job board at jobs.krawlr.xyz (live from Supabase)
+
+The board lives at **https://jobs.krawlr.xyz**. Two hosts, each with one job:
+
+| What | Where | Config |
+| --- | --- | --- |
+| Pages (`web/` minus `web/api`) | Netlify, custom domain `jobs.krawlr.xyz` | `netlify.toml`; `siteUrl` in `config/config.yaml` |
+| Functions (`web/api/*.mjs`: Telegram webhook, `/api/post-status`) | Vercel, `job-scraper-web-beryl.vercel.app` | `vercel.json` / `web/vercel.json`; `apiUrl` in `config/config.yaml` |
+
+- LinkedIn posts, the post picture and Telegram alerts link to `siteUrl`. The Telegram webhook and n8n's
+  post reports use `apiUrl`.
+- `netlify.toml` builds `dist/` from `web/` without `web/api`, proxies `jobs.krawlr.xyz/api/*` to Vercel
+  (so either URL reaches the functions), and sends the old `*.netlify.app` address to the custom domain.
+  Git-connected Netlify deploys read it on every push to `main`; from the CLI, run
+  `netlify deploy --build --prod` in the repo root.
+- On Vercel every page now redirects (301) to the same path on `jobs.krawlr.xyz`, so old post links keep
+  working; only `/api/*` is still served there. The redirect is in both `vercel.json` (Root Directory = repo
+  root) and `web/vercel.json` (Root Directory = `web`), whichever the Vercel project uses.
+- Moving the domain again: change `siteUrl`, the canonical/`og:url` tags in `web/*.html`, `web/sitemap.xml`,
+  `web/robots.txt` and the redirect targets in `netlify.toml` / `vercel.json`. Moving the API: change `apiUrl`,
+  the `/api/*` proxy in `netlify.toml`, then run **Telegram bot setup** again.
 
 `web/` is a static page. With a Supabase URL and anon key in `web/config.js`, it reads jobs live
 from the view `public_jobs`, so new jobs show up right after each scrape without a redeploy.
@@ -147,9 +167,9 @@ from the view `public_jobs`, so new jobs show up right after each scrape without
 2. **Fill in `web/config.js`** with the Project URL and the anon (or publishable) key from
    Supabase → Project Settings → API, and push. Both are meant to be public.
    **Never** put the `service_role` / secret key or `DATABASE_URL` there.
-3. **Vercel → Add New → Project → import this repo** and deploy. `vercel.json` tells Vercel to
-   serve `web/` as static files with no install or build, so leave Root Directory at the repo root.
-   Each push to `main` redeploys.
+3. **Netlify → Add new site → Import an existing project → this repo**. It reads `netlify.toml`, so no
+   build settings are needed. Add the custom domain under Domain management. For the functions,
+   **Vercel → Add New → Project → import this repo** too (see the table above).
 
 Supabase's Security Advisor may flag `public_jobs` as a "security definer" view. That is on
 purpose: it is how the view shows only these columns while the table stays locked.
@@ -306,4 +326,4 @@ Setup:
    API Keys → secret key, or the legacy `service_role` key). Redeploy so the function picks them up.
 4. **GitHub → Settings → Secrets and variables → Actions**: add `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET`.
 5. Run **Scrape jobs** once, so the tables exist, then **Actions → Telegram bot setup → Run workflow**
-   with your site URL. It prints the bot's link; open it and send `/start`.
+   (it uses `apiUrl` from `config/config.yaml`; or type another API URL). It prints the bot's link; open it and send `/start`.

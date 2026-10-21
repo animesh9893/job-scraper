@@ -1,13 +1,13 @@
 name: Telegram bot setup
 
-# Points the bot at the webhook on the Vercel site (web/api/telegram.mjs) and sets its command menu.
-# Run once after the site is deployed with the Telegram env vars, and again if the URL or secret changes.
+# Points the bot at the webhook on Vercel (web/api/telegram.mjs) and sets its command menu.
+# Run once after the API is deployed with the Telegram env vars, and again if the URL or secret changes.
 on:
   workflow_dispatch:
     inputs:
-      site_url:
-        description: 'The Vercel site, e.g. https://job-scraper.vercel.app'
-        required: true
+      api_url:
+        description: 'Where web/api runs (Vercel). Leave empty to use apiUrl from config/config.yaml'
+        required: false
 
 permissions:
   contents: read
@@ -25,8 +25,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --omit=dev
-      - run: node src/telegram-setup.js "$SITE_URL"
+      - run: node src/telegram-setup.js "$API_URL"
         env:
-          SITE_URL: ${{ inputs.site_url }}
+          API_URL: ${{ inputs.api_url }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_WEBHOOK_SECRET: ${{ secrets.TELEGRAM_WEBHOOK_SECRET }}

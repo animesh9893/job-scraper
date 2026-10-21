@@ -9,6 +9,23 @@
 <script defer src="https://cloud.umami.is/script.js" data-website-id="5fbe1f5f-e3f5-4827-bafa-b9b59b4e3ec3"></script>
 <title>Job · Tech Jobs</title>
 <meta name="description" content="Job details, pay and the link to apply on LinkedIn.">
+<link rel="canonical" href="https://jobs.krawlr.xyz/job.html">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Tech Jobs">
+<meta property="og:title" content="Job · Tech Jobs">
+<meta property="og:description" content="Job details, pay and the link to apply on LinkedIn.">
+<meta property="og:url" content="https://jobs.krawlr.xyz/job.html">
+<meta name="twitter:card" content="summary">
+<script>
+// Each job / alert is its own page: point the canonical and share links at it (?id=… only, nothing else).
+(() => {
+  const id = new URLSearchParams(location.search).get('id');
+  if (!id) return;
+  const url = 'https://jobs.krawlr.xyz/job.html?id=' + encodeURIComponent(id);
+  document.querySelector('link[rel="canonical"]').href = url;
+  document.querySelector('meta[property="og:url"]').content = url;
+})();
+</script>
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <style>
   :root {
@@ -236,8 +253,10 @@ function render(j, salaries = []) {
   const link = safeUrl(j.url) ?? safeUrl(j.applyUrl);
   const onLinkedIn = /(^|\.)linkedin\.com$/.test(link ? new URL(link).hostname : '');
   document.title = `${j.title} at ${j.company} · Tech Jobs`;
-  document.querySelector('meta[name="description"]').content =
-    `${j.title} at ${j.company}${j.location ? ` in ${j.location}` : ''}. See the details and apply on LinkedIn.`;
+  const summary = `${j.title} at ${j.company}${j.location ? ` in ${j.location}` : ''}. See the details and apply on LinkedIn.`;
+  document.querySelector('meta[name="description"]').content = summary;
+  document.querySelector('meta[property="og:title"]').content = document.title;
+  document.querySelector('meta[property="og:description"]').content = summary;
 
   const facts = [
     ['Pay', j.salary || (match && `~${money(match.median, match.currency)}/yr (Glassdoor)`)],

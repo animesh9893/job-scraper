@@ -1,0 +1,6 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "redirects": [
+    { "source": "/:path((?!api/|api$).*)", "destination": "https://jobs.krawlr.xyz/:path", "permanent": true }
+  ]
+}
