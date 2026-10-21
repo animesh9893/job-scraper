@@ -17,7 +17,9 @@ if (!token) {
 
 // "View job" opens the job's page on the board (siteUrl in config), like the board and the LinkedIn posts do.
 const { siteUrl } = loadConfig();
-const jobUrl = ({ job_id: jobId, url }) => (siteUrl && jobId ? `${siteUrl}/job.html?id=${encodeURIComponent(jobId)}` : url);
+// utm_source tells the site's analytics (Umami) the visit came from a Telegram alert.
+const jobUrl = ({ job_id: jobId, url }) => (siteUrl && jobId
+    ? `${siteUrl}/job.html?id=${encodeURIComponent(jobId)}&utm_source=telegram&utm_medium=alert` : url);
 
 const escapeHtml = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

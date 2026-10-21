@@ -169,6 +169,7 @@
 </div>
 
 <script src="config.js"></script>
+<script src="analytics.js"></script>
 <script type="module">
 // One job's page (?id=<job id>, linked from the board, hiring alerts and LinkedIn posts): its details and
 // description from the view public_job, its company's Glassdoor salaries, a button to apply on LinkedIn, and the
@@ -265,8 +266,13 @@ function render(j, salaries = []) {
     ['Found', j.firstSeenAt && `${ago(j.firstSeenAt)} · ${new Date(j.firstSeenAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`],
   ].filter(([, v]) => v);
 
+  // from: utm_source (Telegram alerts set it) or the site that linked here, e.g. www.linkedin.com.
+  const from = new URLSearchParams(location.search).get('utm_source')
+    || (document.referrer ? new URL(document.referrer).hostname : 'direct');
+  const about = { id: j.id, title: j.title, company: j.company, location: j.location, category: j.category, from };
+  track('job-view', about);
   const apply = link && el('a', { className: 'btn apply', href: link, target: '_blank', rel: 'noopener nofollow',
-    textContent: onLinkedIn ? 'Apply on LinkedIn ↗' : 'Apply now ↗' });
+    textContent: onLinkedIn ? 'Apply on LinkedIn ↗' : 'Apply now ↗', onclick: () => track('apply-click', about) });
   const desc = j.description && el('div', { className: 'desc', textContent: j.description });
 
   $('main').replaceChildren(el('article', { className: 'job' },

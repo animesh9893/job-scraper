@@ -117,6 +117,7 @@
 </div>
 
 <script src="config.js"></script>
+<script src="analytics.js"></script>
 <script type="module">
 // The jobs of one LinkedIn hiring-alert post (?id=<post id>, from the posts table), or of the latest one.
 const $ = (id) => document.getElementById(id);
@@ -144,6 +145,7 @@ try {
   const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm');
   const db = createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY, { auth: { persistSession: false } });
   let id = Number(new URLSearchParams(location.search).get('id')) || null;
+  track('alert-view', { id });
   if (!id) {
     const { data, error } = await db.from('public_alert_jobs').select('alertId').order('alertId', { ascending: false }).limit(1);
     if (error) throw error;

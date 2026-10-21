@@ -221,6 +221,7 @@
 </div>
 
 <script src="config.js"></script>
+<script src="analytics.js"></script>
 <script>
 const PAGE_SIZE = 25;
 const WORKPLACES = [['all', 'Anywhere'], ['remote', 'Remote'], ['hybrid', 'Hybrid'], ['onsite', 'On-site / not stated']];
@@ -516,10 +517,14 @@ async function loadMore() {
 }
 
 // Filters live in the URL (?category=backend&workplace=remote&company=google&q=react) so filtered views can be shared.
+let settled;
 function sync() {
   const params = new URLSearchParams();
   for (const [k, v] of Object.entries(state)) if (v && v !== 'all') params.set(k, v);
   history.replaceState(null, '', params.size ? `?${params}` : location.pathname);
+  // One Umami event per filter the visitor stays on (not one per keystroke).
+  clearTimeout(settled);
+  if (params.size) settled = setTimeout(() => track('board-filter', Object.fromEntries(params)), 2000);
   renderTabs();
   renderCompanies();
   renderCompanyInfo();

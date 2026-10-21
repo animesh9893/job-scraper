@@ -158,6 +158,21 @@ The board lives at **https://jobs.krawlr.xyz**. Two hosts, each with one job:
   `web/robots.txt` and the redirect targets in `netlify.toml` / `vercel.json`. Moving the API: change `apiUrl`,
   the `/api/*` proxy in `netlify.toml`, then run **Telegram bot setup** again.
 
+### Analytics (Umami)
+
+Every page loads Umami (`data-website-id` in each page's `<head>`). Page views show under **Pages**
+(`/job.html?id=…` is one job). `web/analytics.js` adds custom events, under **Events** (open an event to break
+it down by its properties):
+
+| Event | When | Properties |
+| --- | --- | --- |
+| `job-view` | a job page loads | `id`, `title`, `company`, `location`, `category`, `from` (utm_source or the linking site) |
+| `apply-click` | Apply on LinkedIn / Apply now | same as `job-view` |
+| `board-filter` | a board filter or search held for 2 s | `category`, `workplace`, `company`, `premium`, `q` |
+| `alert-view` | a hiring-alert page loads | `id` |
+
+Telegram alert links carry `utm_source=telegram`, so they show under Sources → UTM too.
+
 `web/` is a static page. With a Supabase URL and anon key in `web/config.js`, it reads jobs live
 from the view `public_jobs`, so new jobs show up right after each scrape without a redeploy.
 
