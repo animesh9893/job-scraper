@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { splitJobs, buildPost, checkPost, plain, bold, italic, payFor, payRoles, jobLink, postHashtags } from '../src/linkedin-posts.js';
+import { splitJobs, buildPost, checkPost, plain, bold, italic, payFor, payRoles, jobLink, postHashtags, retarget } from '../src/linkedin-posts.js';
 import { postImageSvg, renderPostImage, pickCompanies, loadLogos, MAX_FEATURED } from '../src/post-image.js';
 
 const people = [{ id: 'animesh' }, { id: 'sachin' }];
@@ -165,4 +165,11 @@ test('a long post drops hashtags before going over LinkedIn\'s limit', () => {
     const body = buildPost({ id: 1, siteUrl: 'https://jobs.krawlr.xyz', hashtags: ['hiring'], maxHashtags: 30, fillerHashtags: filler, jobs });
     assert.ok(body.length <= 3000, `${body.length} characters`);
     assert.deepEqual(checkPost(body), []);
+});
+
+test('retarget moves draft links from the old site to the new one', () => {
+    const old = '🔗 https://old.vercel.app/job.html?id=1\n👉 More: https://old.vercel.app/\n#hiring';
+    assert.equal(retarget(old, ['https://old.vercel.app'], 'https://jobs.krawlr.xyz/'),
+        '🔗 https://jobs.krawlr.xyz/job.html?id=1\n👉 More: https://jobs.krawlr.xyz/\n#hiring');
+    assert.equal(retarget('no links', ['https://old.vercel.app'], 'https://jobs.krawlr.xyz'), 'no links');
 });

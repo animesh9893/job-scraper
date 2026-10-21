@@ -102,6 +102,7 @@ site:
 linkedin:
   # Posts link each job to its /job.html page on siteUrl (above) and end with the home page. Set linkedin.siteUrl only
   # to send posts somewhere else.
+  oldSiteUrls: [https://job-scraper-web-beryl.vercel.app]   # drafts still linking here are moved to siteUrl
   everyHours: 4         # at most one post per person this often; scrapes in between keep their jobs for the next post
   jobsPerPost: 10
   minJobs: 10           # no post for a person who would get fewer new jobs than this; they wait for the next one

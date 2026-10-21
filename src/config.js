@@ -26,7 +26,7 @@ export function loadConfig() {
         siteUrl: trimUrl(config.siteUrl),
         apiUrl: trimUrl(config.apiUrl ?? config.siteUrl),
         site: { title: 'Tech Jobs', maxAgeDays: 30, maxJobs: 1000, ...config.site },
-        linkedin: { everyHours: 0, jobsPerPost: 6, minJobs: 3, hashtags: [], maxHashtags: 10, fillerHashtags: [], people: [], ...config.linkedin, siteUrl: trimUrl(config.linkedin?.siteUrl ?? config.siteUrl) },
+        linkedin: { everyHours: 0, jobsPerPost: 6, minJobs: 3, hashtags: [], maxHashtags: 10, fillerHashtags: [], people: [], oldSiteUrls: [], ...config.linkedin, siteUrl: trimUrl(config.linkedin?.siteUrl ?? config.siteUrl) },
     };
 }
 
